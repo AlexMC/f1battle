@@ -7,6 +7,7 @@ interface Props {
   driver1: Driver;
   driver2: Driver;
   isLiveSession: boolean;
+  simulationSpeed: number;
 }
 
 interface LapComparisonData {
@@ -35,12 +36,13 @@ const formatTime = (seconds?: number): string => {
   return seconds.toFixed(3);
 };
 
-export const LapComparison: React.FC<Props> = ({ timingData, driver1, driver2, isLiveSession }) => {
+export const LapComparison: React.FC<Props> = ({ timingData, driver1, driver2, isLiveSession, simulationSpeed }) => {
   const visibleTiming = useTimingSimulation(
     timingData, 
     isLiveSession,
     driver1.driver_number,
-    driver2.driver_number
+    driver2.driver_number,
+    simulationSpeed
   );
 
   const getLapComparisonData = (): LapComparisonData[] => {

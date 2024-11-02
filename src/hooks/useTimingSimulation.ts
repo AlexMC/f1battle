@@ -1,16 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TimingData } from '../types';
 
 export const useTimingSimulation = (
   timingData: TimingData[], 
   isLiveSession: boolean,
   driver1Number: number,
-  driver2Number: number
+  driver2Number: number,
+  simulationSpeed: number = 1
 ) => {
   const [visibleTiming, setVisibleTiming] = useState<Record<number, {
     driver1: { sector1Visible: boolean; sector2Visible: boolean; sector3Visible: boolean; };
     driver2: { sector1Visible: boolean; sector2Visible: boolean; sector3Visible: boolean; };
   }>>({});
+  const startTimeRef = useRef<number>(Date.now());
+  const lastUpdateTimeRef = useRef<number>(Date.now());
+  const elapsedTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (isLiveSession) {
@@ -29,86 +33,67 @@ export const useTimingSimulation = (
     const allLaps = [...new Set(timingData.map(t => t.lap_number))].sort((a, b) => a - b);
     if (allLaps.length === 0) return;
 
-    const initialTiming = allLaps.reduce((acc, lapNumber) => ({
-      ...acc,
-      [lapNumber]: {
-        driver1: { sector1Visible: false, sector2Visible: false, sector3Visible: false },
-        driver2: { sector1Visible: false, sector2Visible: false, sector3Visible: false }
-      }
-    }), {});
-    setVisibleTiming(initialTiming);
-
-    let currentLap = 1;
-    let currentSector = 1;
-    let elapsedTime = 0;
-
-    const calculateExpectedTimeForSector = (lap: number, sector: number, driverNumber: number): number => {
-      let totalTime = 0;
-      
-      // Sum up all previous complete laps
-      for (let prevLap = 1; prevLap < lap; prevLap++) {
-        const lapData = timingData.find(t => 
-          t.lap_number === prevLap && 
-          t.driver_number === driverNumber
-        );
-        if (lapData) {
-          totalTime += (lapData.sector_1_time || 0) + 
-                      (lapData.sector_2_time || 0) + 
-                      (lapData.sector_3_time || 0);
+    // Initialize timing state if not already set
+    if (Object.keys(visibleTiming).length === 0) {
+      const initialTiming = allLaps.reduce((acc, lapNumber) => ({
+        ...acc,
+        [lapNumber]: {
+          driver1: { sector1Visible: false, sector2Visible: false, sector3Visible: false },
+          driver2: { sector1Visible: false, sector2Visible: false, sector3Visible: false }
         }
-      }
-
-      // Add current lap sectors up to the requested sector
-      const currentLapData = timingData.find(t => 
-        t.lap_number === lap && 
-        t.driver_number === driverNumber
-      );
-      
-      if (currentLapData) {
-        if (sector >= 1) totalTime += (currentLapData.sector_1_time || 0);
-        if (sector >= 2) totalTime += (currentLapData.sector_2_time || 0);
-        if (sector >= 3) totalTime += (currentLapData.sector_3_time || 0);
-      }
-
-      return totalTime;
-    };
+      }), {});
+      setVisibleTiming(initialTiming);
+      startTimeRef.current = Date.now();
+      lastUpdateTimeRef.current = Date.now();
+      elapsedTimeRef.current = 0;
+    }
 
     const simulationInterval = setInterval(() => {
-      elapsedTime += 0.5;
+      const currentTime = Date.now();
+      const deltaTime = (currentTime - lastUpdateTimeRef.current) / 1000; // Convert to seconds
+      const simulatedDeltaTime = deltaTime * simulationSpeed;
+      elapsedTimeRef.current += simulatedDeltaTime;
+      lastUpdateTimeRef.current = currentTime;
 
       setVisibleTiming(prev => {
         const newTiming = { ...prev };
-        let shouldContinue = false;
+        let shouldUpdate = false;
 
         ['driver1', 'driver2'].forEach(driverKey => {
           const driverNumber = driverKey === 'driver1' ? driver1Number : driver2Number;
+          let accumulatedTime = 0;
 
-          for (let lap = 1; lap <= Math.max(...allLaps); lap++) {
-            const expectedTime1 = calculateExpectedTimeForSector(lap, 1, driverNumber);
-            const expectedTime2 = calculateExpectedTimeForSector(lap, 2, driverNumber);
-            const expectedTime3 = calculateExpectedTimeForSector(lap, 3, driverNumber);
+          allLaps.forEach(lap => {
+            const lapData = timingData.find(t => t.lap_number === lap && t.driver_number === driverNumber);
+            if (!lapData) return;
 
-            if (elapsedTime >= expectedTime1 && !newTiming[lap][driverKey].sector1Visible) {
+            // Calculate sector visibility based on accumulated time
+            if (elapsedTimeRef.current >= accumulatedTime && !newTiming[lap][driverKey].sector1Visible) {
               newTiming[lap][driverKey].sector1Visible = true;
-              shouldContinue = true;
+              shouldUpdate = true;
             }
-            if (elapsedTime >= expectedTime2 && !newTiming[lap][driverKey].sector2Visible) {
+            accumulatedTime += lapData.sector_1_time || 0;
+
+            if (elapsedTimeRef.current >= accumulatedTime && !newTiming[lap][driverKey].sector2Visible) {
               newTiming[lap][driverKey].sector2Visible = true;
-              shouldContinue = true;
+              shouldUpdate = true;
             }
-            if (elapsedTime >= expectedTime3 && !newTiming[lap][driverKey].sector3Visible) {
+            accumulatedTime += lapData.sector_2_time || 0;
+
+            if (elapsedTimeRef.current >= accumulatedTime && !newTiming[lap][driverKey].sector3Visible) {
               newTiming[lap][driverKey].sector3Visible = true;
-              shouldContinue = true;
+              shouldUpdate = true;
             }
-          }
+            accumulatedTime += lapData.sector_3_time || 0;
+          });
         });
 
-        return newTiming;
+        return shouldUpdate ? newTiming : prev;
       });
-    }, 500);
+    }, 100);
 
     return () => clearInterval(simulationInterval);
-  }, [timingData, isLiveSession, driver1Number, driver2Number]);
+  }, [timingData, isLiveSession, driver1Number, driver2Number, simulationSpeed]);
 
   return visibleTiming;
 }; 
