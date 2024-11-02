@@ -8,11 +8,12 @@ import { SessionHeader } from './components/SessionHeader';
 import { SimulationControls } from './components/SimulationControls';
 
 export const App: React.FC = () => {
-  const { sessions, selectedSession, setSelectedSession, drivers, timingData, setSelectedDrivers } = useF1Data();
+  const { sessions, selectedSession, setSelectedSession, drivers, timingData, setSelectedDrivers, isLoading } = useF1Data();
   const [selectedDriver1, setSelectedDriver1] = useState<Driver | null>(null);
   const [selectedDriver2, setSelectedDriver2] = useState<Driver | null>(null);
   const [isSelectionCollapsed, setIsSelectionCollapsed] = useState(false);
   const [simulationSpeed, setSimulationSpeed] = useState(1);
+  const [isSimulationStarted, setIsSimulationStarted] = useState(false);
 
   const getLatestDriverTiming = (driverNumber: number) => {
     return timingData
@@ -39,6 +40,11 @@ export const App: React.FC = () => {
   const handleSelectDriver2 = (driver: Driver) => {
     setSelectedDriver2(driver);
     setSelectedDrivers(prev => ({ ...prev, driver2: driver.driver_number }));
+  };
+
+  const handleConfirmSelection = () => {
+    setIsSelectionCollapsed(true);
+    setIsSimulationStarted(true);
   };
 
   return (
@@ -76,30 +82,36 @@ export const App: React.FC = () => {
             {selectedDriver1 && selectedDriver2 && !isSelectionCollapsed && (
               <div className="flex justify-end mb-8">
                 <button
-                  onClick={() => setIsSelectionCollapsed(true)}
+                  onClick={handleConfirmSelection}
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                 >
-                  Confirm Selection
+                  Start Simulation
                 </button>
               </div>
             )}
 
             {selectedDriver1 && selectedDriver2 && (
               <div className="mt-4">
-                <h2 className="text-xl font-semibold mb-4">Lap by Lap Comparison</h2>
-                {selectedSession?.status !== 'active' && (
-                  <SimulationControls 
-                    speed={simulationSpeed}
-                    onSpeedChange={setSimulationSpeed}
-                  />
+                {isSimulationStarted && (
+                  <>
+                    <h2 className="text-xl font-semibold mb-4">Lap by Lap Comparison</h2>
+                    {selectedSession?.status !== 'active' && (
+                      <SimulationControls 
+                        speed={simulationSpeed}
+                        onSpeedChange={setSimulationSpeed}
+                      />
+                    )}
+                    <LapComparison 
+                      timingData={timingData}
+                      driver1={selectedDriver1}
+                      driver2={selectedDriver2}
+                      isLiveSession={selectedSession?.status === 'active'}
+                      simulationSpeed={simulationSpeed}
+                      isLoading={isLoading}
+                      isSimulationStarted={isSimulationStarted}
+                    />
+                  </>
                 )}
-                <LapComparison 
-                  timingData={timingData}
-                  driver1={selectedDriver1}
-                  driver2={selectedDriver2}
-                  isLiveSession={selectedSession?.status === 'active'}
-                  simulationSpeed={simulationSpeed}
-                />
               </div>
             )}
           </>

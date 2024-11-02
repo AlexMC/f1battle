@@ -56,6 +56,7 @@ export const useF1Data = () => {
   const [timingData, setTimingData] = useState<TimingData[]>([]);
   const [selectedDrivers, setSelectedDrivers] = useState<{ driver1?: number; driver2?: number }>({});
   const [has2024Data, setHas2024Data] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Separate effect for fetching 2024 sessions (one-time)
   useEffect(() => {
@@ -192,6 +193,7 @@ export const useF1Data = () => {
     let isMounted = true;
 
     const fetchTimingData = async () => {
+      setIsLoading(true);
       try {
         // Fetch lap times for each driver separately
         const [driver1Laps, driver2Laps] = await Promise.all([
@@ -226,6 +228,8 @@ export const useF1Data = () => {
       } catch (error) {
         console.error('Error fetching timing data:', error);
         if (isMounted) setTimingData([]);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -253,6 +257,7 @@ export const useF1Data = () => {
     setSelectedSession,
     drivers, 
     timingData,
-    setSelectedDrivers 
+    setSelectedDrivers,
+    isLoading 
   };
 }; 

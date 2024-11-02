@@ -1,6 +1,7 @@
 import React from 'react';
 import { Driver, TimingData } from '../types';
 import { useTimingSimulation } from '../hooks/useTimingSimulation';
+import { LoadingSpinner } from './LoadingSpinner';
 
 interface Props {
   timingData: TimingData[];
@@ -8,6 +9,8 @@ interface Props {
   driver2: Driver;
   isLiveSession: boolean;
   simulationSpeed: number;
+  isLoading: boolean;
+  isSimulationStarted: boolean;
 }
 
 interface LapComparisonData {
@@ -24,6 +27,19 @@ interface LapComparisonData {
   };
 }
 
+type VisibleTiming = Record<number, {
+  driver1: {
+    sector1Visible: boolean;
+    sector2Visible: boolean;
+    sector3Visible: boolean;
+  };
+  driver2: {
+    sector1Visible: boolean;
+    sector2Visible: boolean;
+    sector3Visible: boolean;
+  };
+}>;
+
 const formatTime = (seconds?: number): string => {
   if (!seconds) return '-';
   
@@ -36,45 +52,79 @@ const formatTime = (seconds?: number): string => {
   return seconds.toFixed(3);
 };
 
-export const LapComparison: React.FC<Props> = ({ timingData, driver1, driver2, isLiveSession, simulationSpeed }) => {
-  const visibleTiming = useTimingSimulation(
+export const LapComparison: React.FC<Props> = ({ 
+  timingData, 
+  driver1, 
+  driver2, 
+  isLiveSession, 
+  simulationSpeed,
+  isLoading,
+  isSimulationStarted 
+}) => {
+  const { visibleTiming, isSimulationInitialized } = useTimingSimulation(
     timingData, 
     isLiveSession,
-    driver1.driver_number,
-    driver2.driver_number,
-    simulationSpeed
+    driver1.driver_number.toString(),
+    driver2.driver_number.toString(),
+    simulationSpeed,
+    isSimulationStarted
   );
 
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
   const getLapComparisonData = (): LapComparisonData[] => {
+    if (!isSimulationInitialized && !isLiveSession) {
+      return [];
+    }
+    
     const allLaps = [...new Set(timingData.map(t => t.lap_number))].sort((a, b) => b - a);
     
-    const completedLaps = Object.keys(visibleTiming)
-      .filter(lapNum => 
-        visibleTiming[Number(lapNum)]?.driver1.sector3Visible || 
-        visibleTiming[Number(lapNum)]?.driver2.sector3Visible
-      )
-      .map(Number);
+    // Only show data if we have visible timing
+    if (Object.keys(visibleTiming).length === 0) {
+      return [];
+    }
 
-    // If no laps are completed yet, show only lap 1
-    const maxVisibleLap = completedLaps.length > 0 ? Math.max(...completedLaps) + 1 : 1;
+    // Only show laps that have at least one visible sector
+    const visibleLaps = Object.entries(visibleTiming)
+      .filter(([_, lapData]) => 
+        lapData.driver1.sector1Visible || 
+        lapData.driver2.sector1Visible
+      )
+      .map(([lapNum]) => Number(lapNum));
+
+    // If no laps are visible yet, don't show any
+    if (visibleLaps.length === 0) {
+      return [];
+    }
+
+    // Get the maximum visible lap
+    const maxVisibleLap = Math.max(...visibleLaps);
 
     return allLaps
       .filter(lapNumber => lapNumber <= maxVisibleLap)
       .map(lapNumber => {
-        const driver1Lap = timingData.find(t => t.lap_number === lapNumber && t.driver_number === driver1.driver_number);
-        const driver2Lap = timingData.find(t => t.lap_number === lapNumber && t.driver_number === driver2.driver_number);
+        const driver1Lap = timingData.find(t => 
+          t.lap_number === lapNumber && 
+          t.driver_number === driver1.driver_number
+        );
+        const driver2Lap = timingData.find(t => 
+          t.lap_number === lapNumber && 
+          t.driver_number === driver2.driver_number
+        );
         
         return {
           lapNumber,
           driver1: {
-            sector1: driver1Lap?.sector_1_time,
-            sector2: driver1Lap?.sector_2_time,
-            sector3: driver1Lap?.sector_3_time,
+            sector1: visibleTiming[lapNumber]?.driver1.sector1Visible ? driver1Lap?.sector_1_time : undefined,
+            sector2: visibleTiming[lapNumber]?.driver1.sector2Visible ? driver1Lap?.sector_2_time : undefined,
+            sector3: visibleTiming[lapNumber]?.driver1.sector3Visible ? driver1Lap?.sector_3_time : undefined,
           },
           driver2: {
-            sector1: driver2Lap?.sector_1_time,
-            sector2: driver2Lap?.sector_2_time,
-            sector3: driver2Lap?.sector_3_time,
+            sector1: visibleTiming[lapNumber]?.driver2.sector1Visible ? driver2Lap?.sector_1_time : undefined,
+            sector2: visibleTiming[lapNumber]?.driver2.sector2Visible ? driver2Lap?.sector_2_time : undefined,
+            sector3: visibleTiming[lapNumber]?.driver2.sector3Visible ? driver2Lap?.sector_3_time : undefined,
           }
         };
       });
@@ -85,7 +135,7 @@ export const LapComparison: React.FC<Props> = ({ timingData, driver1, driver2, i
     time2: number | undefined,
     lapNumber: number,
     sector: number,
-    visibleTiming: Record<number, any>
+    visibleTiming: VisibleTiming
   ): string | undefined => {
     if (!time1 || !time2) return undefined;
     
@@ -104,16 +154,32 @@ export const LapComparison: React.FC<Props> = ({ timingData, driver1, driver2, i
 
   const lapData = getLapComparisonData();
 
-  const formatSectorTime = (time: number | undefined, lapNumber: number, driverNum: number, sector: number, visibleTiming: Record<number, any>) => {
-    const isVisible = visibleTiming[lapNumber]?.[`driver${driverNum}`]?.[`sector${sector}Visible`];
-    if (!isVisible) return '...';
+  const formatSectorTime = (
+    time: number | undefined, 
+    lapNumber: number, 
+    driverNum: number, 
+    sector: number, 
+    visibleTiming: VisibleTiming
+  ) => {
+    // Return dash if timing object isn't initialized yet
+    if (!visibleTiming[lapNumber]) {
+      return '-';
+    }
+    
+    const isVisible = visibleTiming[lapNumber][`driver${driverNum}`][`sector${sector}Visible`];
+    if (!isVisible || time === undefined) {
+      return '-';
+    }
+    
     return formatTime(time);
   };
 
-  const formatLapTime = (lapData: { sector1?: number; sector2?: number; sector3?: number }, 
-                        lapNumber: number, 
-                        driverNum: number, 
-                        visibleTiming: Record<number, any>) => {
+  const formatLapTime = (
+    lapData: { sector1?: number; sector2?: number; sector3?: number }, 
+    lapNumber: number, 
+    driverNum: number, 
+    visibleTiming: VisibleTiming
+  ) => {
     const isAllSectorsVisible = visibleTiming[lapNumber]?.[`driver${driverNum}`]?.sector3Visible;
     if (!isAllSectorsVisible) return '...';
     

@@ -1,40 +1,59 @@
 import { useState, useEffect, useRef } from 'react';
 import { TimingData } from '../types';
 
+interface VisibleTiming {
+  [lapNumber: number]: {
+    driver1: { sector1Visible: boolean; sector2Visible: boolean; sector3Visible: boolean; };
+    driver2: { sector1Visible: boolean; sector2Visible: boolean; sector3Visible: boolean; };
+  };
+}
+
+interface TimingSimulationResult {
+  visibleTiming: VisibleTiming;
+  isSimulationInitialized: boolean;
+}
+
 export const useTimingSimulation = (
   timingData: TimingData[], 
   isLiveSession: boolean,
-  driver1Number: number,
-  driver2Number: number,
-  simulationSpeed: number = 1
-) => {
-  const [visibleTiming, setVisibleTiming] = useState<Record<number, {
-    driver1: { sector1Visible: boolean; sector2Visible: boolean; sector3Visible: boolean; };
-    driver2: { sector1Visible: boolean; sector2Visible: boolean; sector3Visible: boolean; };
-  }>>({});
-  const startTimeRef = useRef<number>(Date.now());
-  const lastUpdateTimeRef = useRef<number>(Date.now());
+  driver1Number: string,
+  driver2Number: string,
+  simulationSpeed: number = 1,
+  isSimulationStarted: boolean = false
+): TimingSimulationResult => {
+  const [visibleTiming, setVisibleTiming] = useState<VisibleTiming>({});
+  const [isSimulationInitialized, setIsSimulationInitialized] = useState(false);
+  const startTimeRef = useRef<number>(0);
+  const lastUpdateTimeRef = useRef<number>(0);
   const elapsedTimeRef = useRef<number>(0);
 
   useEffect(() => {
-    if (isLiveSession) {
-      const allLaps = [...new Set(timingData.map(t => t.lap_number))];
-      const initialTiming = allLaps.reduce((acc, lapNumber) => ({
-        ...acc,
-        [lapNumber]: {
-          driver1: { sector1Visible: true, sector2Visible: true, sector3Visible: true },
-          driver2: { sector1Visible: true, sector2Visible: true, sector3Visible: true }
-        }
-      }), {});
-      setVisibleTiming(initialTiming);
+    if (!isSimulationStarted && !isLiveSession) {
+      setVisibleTiming({});
+      setIsSimulationInitialized(false);
+      startTimeRef.current = 0;
+      lastUpdateTimeRef.current = 0;
+      elapsedTimeRef.current = 0;
       return;
     }
 
     const allLaps = [...new Set(timingData.map(t => t.lap_number))].sort((a, b) => a - b);
     if (allLaps.length === 0) return;
 
-    // Initialize timing state if not already set
-    if (Object.keys(visibleTiming).length === 0) {
+    if (isLiveSession) {
+      const liveTiming = allLaps.reduce((acc, lapNumber) => ({
+        ...acc,
+        [lapNumber]: {
+          driver1: { sector1Visible: true, sector2Visible: true, sector3Visible: true },
+          driver2: { sector1Visible: true, sector2Visible: true, sector3Visible: true }
+        }
+      }), {});
+      setVisibleTiming(liveTiming);
+      setIsSimulationInitialized(true);
+      return;
+    }
+
+    if (isSimulationStarted && !isSimulationInitialized) {
       const initialTiming = allLaps.reduce((acc, lapNumber) => ({
         ...acc,
         [lapNumber]: {
@@ -43,14 +62,17 @@ export const useTimingSimulation = (
         }
       }), {});
       setVisibleTiming(initialTiming);
+      setIsSimulationInitialized(true);
       startTimeRef.current = Date.now();
       lastUpdateTimeRef.current = Date.now();
       elapsedTimeRef.current = 0;
     }
 
     const simulationInterval = setInterval(() => {
+      if (!isSimulationStarted) return;
+
       const currentTime = Date.now();
-      const deltaTime = (currentTime - lastUpdateTimeRef.current) / 1000; // Convert to seconds
+      const deltaTime = (currentTime - lastUpdateTimeRef.current) / 1000;
       const simulatedDeltaTime = deltaTime * simulationSpeed;
       elapsedTimeRef.current += simulatedDeltaTime;
       lastUpdateTimeRef.current = currentTime;
@@ -61,31 +83,40 @@ export const useTimingSimulation = (
 
         ['driver1', 'driver2'].forEach(driverKey => {
           const driverNumber = driverKey === 'driver1' ? driver1Number : driver2Number;
-          let accumulatedTime = 0;
+          let totalTimeForLaps = 0;
 
-          allLaps.forEach(lap => {
-            const lapData = timingData.find(t => t.lap_number === lap && t.driver_number === driverNumber);
-            if (!lapData) return;
+          for (const lap of allLaps) {
+            const lapData = timingData.find(t => 
+              t.lap_number === lap && 
+              t.driver_number === Number(driverNumber)
+            );
 
-            // Calculate sector visibility based on accumulated time
-            if (elapsedTimeRef.current >= accumulatedTime && !newTiming[lap][driverKey].sector1Visible) {
+            if (!lapData) continue;
+
+            const sector1Time = lapData.sector_1_time || 0;
+            const sector2Time = lapData.sector_2_time || 0;
+            const sector3Time = lapData.sector_3_time || 0;
+
+            if (elapsedTimeRef.current >= totalTimeForLaps + sector1Time && 
+                !newTiming[lap][driverKey].sector1Visible) {
               newTiming[lap][driverKey].sector1Visible = true;
               shouldUpdate = true;
             }
-            accumulatedTime += lapData.sector_1_time || 0;
 
-            if (elapsedTimeRef.current >= accumulatedTime && !newTiming[lap][driverKey].sector2Visible) {
+            if (elapsedTimeRef.current >= totalTimeForLaps + sector1Time + sector2Time && 
+                !newTiming[lap][driverKey].sector2Visible) {
               newTiming[lap][driverKey].sector2Visible = true;
               shouldUpdate = true;
             }
-            accumulatedTime += lapData.sector_2_time || 0;
 
-            if (elapsedTimeRef.current >= accumulatedTime && !newTiming[lap][driverKey].sector3Visible) {
+            if (elapsedTimeRef.current >= totalTimeForLaps + sector1Time + sector2Time + sector3Time && 
+                !newTiming[lap][driverKey].sector3Visible) {
               newTiming[lap][driverKey].sector3Visible = true;
               shouldUpdate = true;
             }
-            accumulatedTime += lapData.sector_3_time || 0;
-          });
+
+            totalTimeForLaps += sector1Time + sector2Time + sector3Time;
+          }
         });
 
         return shouldUpdate ? newTiming : prev;
@@ -93,7 +124,7 @@ export const useTimingSimulation = (
     }, 100);
 
     return () => clearInterval(simulationInterval);
-  }, [timingData, isLiveSession, driver1Number, driver2Number, simulationSpeed]);
+  }, [timingData, isLiveSession, driver1Number, driver2Number, simulationSpeed, isSimulationStarted]);
 
-  return visibleTiming;
+  return { visibleTiming, isSimulationInitialized };
 }; 
