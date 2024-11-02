@@ -11,6 +11,7 @@ interface VisibleTiming {
 interface TimingSimulationResult {
   visibleTiming: VisibleTiming;
   isSimulationInitialized: boolean;
+  raceTime: number;
 }
 
 export const useTimingSimulation = (
@@ -23,6 +24,7 @@ export const useTimingSimulation = (
 ): TimingSimulationResult => {
   const [visibleTiming, setVisibleTiming] = useState<VisibleTiming>({});
   const [isSimulationInitialized, setIsSimulationInitialized] = useState(false);
+  const [raceTime, setRaceTime] = useState(0);
   const startTimeRef = useRef<number>(0);
   const lastUpdateTimeRef = useRef<number>(0);
   const elapsedTimeRef = useRef<number>(0);
@@ -34,6 +36,7 @@ export const useTimingSimulation = (
       startTimeRef.current = 0;
       lastUpdateTimeRef.current = 0;
       elapsedTimeRef.current = 0;
+      setRaceTime(0);
       return;
     }
 
@@ -76,6 +79,8 @@ export const useTimingSimulation = (
       const simulatedDeltaTime = deltaTime * simulationSpeed;
       elapsedTimeRef.current += simulatedDeltaTime;
       lastUpdateTimeRef.current = currentTime;
+
+      setRaceTime(Math.floor(elapsedTimeRef.current));
 
       setVisibleTiming(prev => {
         const newTiming = { ...prev };
@@ -126,5 +131,5 @@ export const useTimingSimulation = (
     return () => clearInterval(simulationInterval);
   }, [timingData, isLiveSession, driver1Number, driver2Number, simulationSpeed, isSimulationStarted]);
 
-  return { visibleTiming, isSimulationInitialized };
+  return { visibleTiming, isSimulationInitialized, raceTime };
 }; 

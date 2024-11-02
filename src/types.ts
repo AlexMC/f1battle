@@ -15,6 +15,7 @@ export interface TimingData {
   lap_time?: number;
   gap_to_leader?: number;
   session_id: number;
+  timestamp: number;
 }
 
 export interface Session {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Driver, TimingData } from '../types';
 import { useTimingSimulation } from '../hooks/useTimingSimulation';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -11,6 +11,7 @@ interface Props {
   simulationSpeed: number;
   isLoading: boolean;
   isSimulationStarted: boolean;
+  onRaceTimeUpdate: (time: number) => void;
 }
 
 interface LapComparisonData {
@@ -59,9 +60,10 @@ export const LapComparison: React.FC<Props> = ({
   isLiveSession, 
   simulationSpeed,
   isLoading,
-  isSimulationStarted 
+  isSimulationStarted,
+  onRaceTimeUpdate 
 }) => {
-  const { visibleTiming, isSimulationInitialized } = useTimingSimulation(
+  const { visibleTiming, isSimulationInitialized, raceTime } = useTimingSimulation(
     timingData, 
     isLiveSession,
     driver1.driver_number.toString(),
@@ -69,6 +71,10 @@ export const LapComparison: React.FC<Props> = ({
     simulationSpeed,
     isSimulationStarted
   );
+
+  useEffect(() => {
+    onRaceTimeUpdate(raceTime);
+  }, [raceTime, onRaceTimeUpdate]);
 
   if (isLoading) {
     return <LoadingSpinner />;

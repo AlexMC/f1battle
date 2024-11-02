@@ -14,6 +14,7 @@ export const App: React.FC = () => {
   const [isSelectionCollapsed, setIsSelectionCollapsed] = useState(false);
   const [simulationSpeed, setSimulationSpeed] = useState(1);
   const [isSimulationStarted, setIsSimulationStarted] = useState(false);
+  const [currentRaceTime, setCurrentRaceTime] = useState(0);
 
   const getLatestDriverTiming = (driverNumber: number) => {
     return timingData
@@ -45,6 +46,7 @@ export const App: React.FC = () => {
   const handleConfirmSelection = () => {
     setIsSelectionCollapsed(true);
     setIsSimulationStarted(true);
+    setCurrentRaceTime(0);
   };
 
   return (
@@ -99,6 +101,7 @@ export const App: React.FC = () => {
                       <SimulationControls 
                         speed={simulationSpeed}
                         onSpeedChange={setSimulationSpeed}
+                        raceTime={currentRaceTime}
                       />
                     )}
                     <LapComparison 
@@ -109,6 +112,7 @@ export const App: React.FC = () => {
                       simulationSpeed={simulationSpeed}
                       isLoading={isLoading}
                       isSimulationStarted={isSimulationStarted}
+                      onRaceTimeUpdate={setCurrentRaceTime}
                     />
                   </>
                 )}

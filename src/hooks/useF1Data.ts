@@ -219,7 +219,8 @@ export const useF1Data = () => {
             sector_2_time: t.duration_sector_2,
             sector_3_time: t.duration_sector_3,
             lap_time: t.lap_duration,
-            session_id: selectedSession.session_id
+            session_id: selectedSession.session_id,
+            timestamp: t.date
           }));
 
         if (isMounted) {
