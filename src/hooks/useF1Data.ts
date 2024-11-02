@@ -5,8 +5,8 @@ import { cacheUtils } from '../utils/cache';
 const CACHE_KEYS = {
   SESSIONS_2024: 'f1_sessions_2024',
   DRIVERS: (sessionId: number) => `f1_drivers_${sessionId}`,
-  TIMING: (sessionId: number, driver1: number, driver2: number) => 
-    `f1_timing_${sessionId}_${Math.min(driver1, driver2)}_${Math.max(driver1, driver2)}`
+  DRIVER_TIMING: (sessionId: number, driverNumber: number) => 
+    `f1_timing_${sessionId}_${driverNumber}`
 };
 
 const mapApiSessionToSession = (apiSession: any): Session | null => {
@@ -231,79 +231,80 @@ export const useF1Data = () => {
       setIsLoading(true);
 
       // Only use cache for completed sessions with valid drivers
-      if (selectedSession.status === 'completed' && 
-          selectedDrivers.driver1 !== null && 
-          selectedDrivers.driver2 !== null) {
-        const cacheKey = CACHE_KEYS.TIMING(
+      if (selectedSession.status === 'completed') {
+        const driver1CacheKey = CACHE_KEYS.DRIVER_TIMING(
           selectedSession.session_id,
-          selectedDrivers.driver1,
-          selectedDrivers.driver2
+          selectedDrivers.driver1!
+        );
+        const driver2CacheKey = CACHE_KEYS.DRIVER_TIMING(
+          selectedSession.session_id,
+          selectedDrivers.driver2!
         );
         
-        const cachedTiming = cacheUtils.get<TimingData[]>(cacheKey);
+        const cachedDriver1 = cacheUtils.get<TimingData[]>(driver1CacheKey);
+        const cachedDriver2 = cacheUtils.get<TimingData[]>(driver2CacheKey);
         
-        if (cachedTiming) {
+        if (cachedDriver1 && cachedDriver2) {
           if (isMounted) {
-            setTimingData(cachedTiming);
+            setTimingData([...cachedDriver1, ...cachedDriver2]);
             setIsLoading(false);
           }
           return;
         }
-      }
 
-      try {
-        const [driver1Laps, driver2Laps] = await Promise.all([
-          fetch(`/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver1}`),
-          fetch(`/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver2}`)
-        ]);
+        // If we have one driver cached, only fetch the other
+        try {
+          let driver1Data = cachedDriver1;
+          let driver2Data = cachedDriver2;
 
-        const driver1Data = await driver1Laps.json();
-        const driver2Data = await driver2Laps.json();
-        const combinedLapsData = [...driver1Data, ...driver2Data];
-
-        if (!isMounted) return;
-
-        // Map API response to our TimingData interface
-        const mappedTiming = combinedLapsData
-          .filter((t: any) => t && t.driver_number)
-          .map((t: any) => ({
-            driver_number: t.driver_number,
-            lap_number: t.lap_number,
-            sector_1_time: t.duration_sector_1,
-            sector_2_time: t.duration_sector_2,
-            sector_3_time: t.duration_sector_3,
-            lap_time: t.lap_duration,
-            gap_to_leader: t.gap_to_leader,
-            session_id: selectedSession.session_id,
-            timestamp: t.date
-          }))
-          .sort((a, b) => a.lap_number - b.lap_number);
-
-        if (isMounted) {
-          // Cache only completed sessions with valid drivers
-          if (selectedSession.status === 'completed' && 
-              selectedDrivers.driver1 !== null && 
-              selectedDrivers.driver2 !== null) {
-            const cacheKey = CACHE_KEYS.TIMING(
-              selectedSession.session_id,
-              selectedDrivers.driver1,
-              selectedDrivers.driver2
-            );
-            console.log('Setting timing cache:', {
-              sessionId: selectedSession.session_id,
-              status: selectedSession.status,
-              key: cacheKey,
-              dataLength: mappedTiming.length
-            });
-            cacheUtils.set(cacheKey, mappedTiming, 24 * 60 * 60 * 1000);
+          if (!cachedDriver1) {
+            const driver1Response = await fetch(`/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver1}`);
+            const rawDriver1Data = await driver1Response.json();
+            driver1Data = Array.isArray(rawDriver1Data) ? rawDriver1Data.map((t: any) => ({
+              driver_number: t.driver_number,
+              lap_number: t.lap_number,
+              sector_1_time: t.duration_sector_1,
+              sector_2_time: t.duration_sector_2,
+              sector_3_time: t.duration_sector_3,
+              lap_time: t.lap_duration,
+              gap_to_leader: t.gap_to_leader,
+              session_id: selectedSession.session_id,
+              timestamp: t.date
+            })) : [];
+            if (selectedSession.status === 'completed') {
+              cacheUtils.set(driver1CacheKey, driver1Data, 24 * 60 * 60 * 1000);
+            }
           }
-          setTimingData(mappedTiming);
+
+          if (!cachedDriver2) {
+            const driver2Response = await fetch(`/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver2}`);
+            const rawDriver2Data = await driver2Response.json();
+            driver2Data = Array.isArray(rawDriver2Data) ? rawDriver2Data.map((t: any) => ({
+              driver_number: t.driver_number,
+              lap_number: t.lap_number,
+              sector_1_time: t.duration_sector_1,
+              sector_2_time: t.duration_sector_2,
+              sector_3_time: t.duration_sector_3,
+              lap_time: t.lap_duration,
+              gap_to_leader: t.gap_to_leader,
+              session_id: selectedSession.session_id,
+              timestamp: t.date
+            })) : [];
+            if (selectedSession.status === 'completed') {
+              cacheUtils.set(driver2CacheKey, driver2Data, 24 * 60 * 60 * 1000);
+            }
+          }
+
+          if (!isMounted) return;
+
+          const combinedLapsData = [...(driver1Data || []), ...(driver2Data || [])];
+          setTimingData(combinedLapsData.sort((a, b) => a.lap_number - b.lap_number));
+        } catch (error) {
+          console.error('Error fetching timing data:', error);
+          if (isMounted) setTimingData([]);
+        } finally {
+          if (isMounted) setIsLoading(false);
         }
-      } catch (error) {
-        console.error('Error fetching timing data:', error);
-        if (isMounted) setTimingData([]);
-      } finally {
-        if (isMounted) setIsLoading(false);
       }
     };
 

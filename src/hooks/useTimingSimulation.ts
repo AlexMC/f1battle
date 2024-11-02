@@ -44,13 +44,34 @@ export const useTimingSimulation = (
     if (allLaps.length === 0) return;
 
     if (isLiveSession) {
-      const liveTiming = allLaps.reduce((acc, lapNumber) => ({
-        ...acc,
-        [lapNumber]: {
-          driver1: { sector1Visible: true, sector2Visible: true, sector3Visible: true },
-          driver2: { sector1Visible: true, sector2Visible: true, sector3Visible: true }
-        }
-      }), {});
+      const liveTiming = allLaps.reduce((acc, lapNumber) => {
+        const hasDriver1Data = timingData.some(t => 
+          t.lap_number === lapNumber && 
+          t.driver_number === Number(driver1Number) &&
+          t.sector_1_time
+        );
+        const hasDriver2Data = timingData.some(t => 
+          t.lap_number === lapNumber && 
+          t.driver_number === Number(driver2Number) &&
+          t.sector_1_time
+        );
+        
+        return {
+          ...acc,
+          [lapNumber]: {
+            driver1: { 
+              sector1Visible: hasDriver1Data, 
+              sector2Visible: hasDriver1Data, 
+              sector3Visible: hasDriver1Data 
+            },
+            driver2: { 
+              sector1Visible: hasDriver2Data, 
+              sector2Visible: hasDriver2Data, 
+              sector3Visible: hasDriver2Data 
+            }
+          }
+        };
+      }, {});
       setVisibleTiming(liveTiming);
       setIsSimulationInitialized(true);
       return;
