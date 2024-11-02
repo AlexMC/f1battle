@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Driver, TimingData } from '../types';
 import { useTimingSimulation } from '../hooks/useTimingSimulation';
 import { LoadingSpinner } from './LoadingSpinner';
+import { getTeamColor } from '../utils/colors';
 
 interface Props {
   timingData: TimingData[];
@@ -212,7 +213,11 @@ export const LapComparison: React.FC<Props> = ({
               {/* Driver 1 Row */}
               <tr className="hover:bg-gray-700 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{lap.lapNumber}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{driver1.name_acronym}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <span className={`${getTeamColor(driver1.team_name)} font-semibold`}>
+                    {driver1.name_acronym} ({driver1.driver_number})
+                  </span>
+                </td>
                 {[1, 2, 3].map((sector) => (
                   <td key={sector} className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
                     <div className={compareSectorTimes(
@@ -252,7 +257,11 @@ export const LapComparison: React.FC<Props> = ({
               {/* Driver 2 Row */}
               <tr className="hover:bg-gray-700 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{lap.lapNumber}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{driver2.name_acronym}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <span className={`${getTeamColor(driver2.team_name)} font-semibold`}>
+                    {driver2.name_acronym} ({driver2.driver_number})
+                  </span>
+                </td>
                 {[1, 2, 3].map((sector) => (
                   <td key={sector} className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
                     <div className={compareSectorTimes(

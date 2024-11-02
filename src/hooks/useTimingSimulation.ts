@@ -145,6 +145,18 @@ export const useTimingSimulation = (
           }
         });
 
+        if (shouldUpdate) {
+          const allComplete = allLaps.every(lap => 
+            newTiming[lap]?.driver1?.sector3Visible && 
+            newTiming[lap]?.driver2?.sector3Visible
+          );
+          
+          if (allComplete) {
+            clearInterval(simulationInterval);
+          }
+          return newTiming;
+        }
+
         return shouldUpdate ? newTiming : prev;
       });
     }, 100);

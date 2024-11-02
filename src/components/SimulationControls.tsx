@@ -22,24 +22,25 @@ export const SimulationControls: React.FC<Props> = ({ speed, onSpeedChange, race
 
   return (
     <div className="flex items-center justify-between gap-4 mb-4">
-      <div className="flex items-center gap-4">
-        <span className="text-gray-300">Simulation Speed: {speed}x</span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => handleSpeedChange(false)}
-            disabled={speed <= 1}
-            className="px-3 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
-          >
-            -
-          </button>
-          <button
-            onClick={() => handleSpeedChange(true)}
-            disabled={speed >= 20}
-            className="px-3 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
-          >
-            +
-          </button>
+      <div className="flex items-center space-x-4">
+      <span className="text-gray-300">Simulation Speed:</span>
+        <button 
+          onClick={() => handleSpeedChange(false)}
+          className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 transition-colors"
+          disabled={speed <= 1}
+        >
+          -
+        </button>
+        <div className="w-16 text-center">
+          {speed}x
         </div>
+        <button 
+          onClick={() => handleSpeedChange(true)}
+          className="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 transition-colors"
+          disabled={speed >= 20}
+        >
+          +
+        </button>
       </div>
       <div className="text-gray-300 font-mono text-lg">
         Race Time: {formatRaceTime(raceTime)}

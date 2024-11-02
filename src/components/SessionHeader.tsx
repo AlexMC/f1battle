@@ -1,5 +1,6 @@
 import React from 'react';
 import { Driver, Session } from '../types';
+import { getTeamColor } from '../utils/colors';
 
 interface Props {
   session: Session;
@@ -21,8 +22,14 @@ export const SessionHeader: React.FC<Props> = ({
           <h2 className="text-xl font-bold text-gray-200">
             {session.circuit_short_name} ({new Date(session.date).toLocaleDateString()})
           </h2>
-          <div className="text-lg text-gray-300 mt-2">
-            {driver1.full_name} (#{driver1.driver_number}) vs {driver2.full_name} (#{driver2.driver_number})
+          <div className="text-lg mt-2">
+            <span className={getTeamColor(driver1.team_name)}>
+              {driver1.full_name} (#{driver1.driver_number})
+            </span>
+            <span className="text-gray-300"> vs </span>
+            <span className={getTeamColor(driver2.team_name)}>
+              {driver2.full_name} (#{driver2.driver_number})
+            </span>
           </div>
         </div>
         <button
