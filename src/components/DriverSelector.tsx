@@ -17,11 +17,11 @@ export const DriverSelector: React.FC<Props> = ({
   onSelectDriver2,
 }) => {
   return (
-    <div className="flex flex-col md:flex-row gap-4 p-4">
+    <div className="flex flex-col md:flex-row gap-6 p-6 bg-gray-800 rounded-lg shadow-xl mb-8">
       <div className="flex-1">
-        <label className="block text-sm font-medium mb-2">Driver 1</label>
+        <label className="block text-lg font-medium mb-3 text-gray-200">Driver 1</label>
         <select
-          className="w-full p-2 border rounded"
+          className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
           value={selectedDriver1?.driver_number || ''}
           onChange={(e) => {
             const driver = drivers.find(d => d.driver_number.toString() === e.target.value);
@@ -37,9 +37,9 @@ export const DriverSelector: React.FC<Props> = ({
         </select>
       </div>
       <div className="flex-1">
-        <label className="block text-sm font-medium mb-2">Driver 2</label>
+        <label className="block text-lg font-medium mb-3 text-gray-200">Driver 2</label>
         <select
-          className="w-full p-2 border rounded"
+          className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
           value={selectedDriver2?.driver_number || ''}
           onChange={(e) => {
             const driver = drivers.find(d => d.driver_number.toString() === e.target.value);

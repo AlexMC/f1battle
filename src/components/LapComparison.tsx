@@ -92,7 +92,7 @@ export const LapComparison: React.FC<Props> = ({ timingData, driver1, driver2, i
     
     if (!driver1Visible || !driver2Visible) return undefined;
     
-    return time1 < time2 ? 'text-green-600' : 'text-red-600';
+    return time1 < time2 ? 'text-green-400' : 'text-red-400';
   };
 
   const calculateLapTime = (driverData: { sector1?: number; sector2?: number; sector3?: number }): number | undefined => {
@@ -120,27 +120,27 @@ export const LapComparison: React.FC<Props> = ({ timingData, driver1, driver2, i
   };
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="overflow-x-auto bg-gray-800 rounded-lg shadow-xl">
+      <table className="min-w-full divide-y divide-gray-700">
         <thead>
-          <tr>
-            <th className="px-4 py-2">Lap</th>
-            <th className="px-4 py-2">Driver</th>
-            <th className="px-4 py-2">Sector 1</th>
-            <th className="px-4 py-2">Sector 2</th>
-            <th className="px-4 py-2">Sector 3</th>
-            <th className="px-4 py-2">Lap Time</th>
+          <tr className="bg-gray-900">
+            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Lap</th>
+            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Driver</th>
+            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Sector 1</th>
+            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Sector 2</th>
+            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Sector 3</th>
+            <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Lap Time</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200">
+        <tbody className="divide-y divide-gray-700 bg-gray-800">
           {lapData.map((lap) => (
             <React.Fragment key={lap.lapNumber}>
               {/* Driver 1 Row */}
-              <tr className="bg-gray-50">
-                <td className="px-4 py-2 font-medium" rowSpan={2}>{lap.lapNumber}</td>
-                <td className="px-4 py-2 font-medium">{driver1.name_acronym}</td>
+              <tr className="hover:bg-gray-700 transition-colors">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{lap.lapNumber}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{driver1.name_acronym}</td>
                 {[1, 2, 3].map((sector) => (
-                  <td key={sector} className="px-4 py-2">
+                  <td key={sector} className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
                     <div className={compareSectorTimes(
                       lap.driver1[`sector${sector}` as keyof typeof lap.driver1],
                       lap.driver2[`sector${sector}` as keyof typeof lap.driver2],
@@ -158,7 +158,7 @@ export const LapComparison: React.FC<Props> = ({ timingData, driver1, driver2, i
                     </div>
                   </td>
                 ))}
-                <td className="px-4 py-2">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
                   <div className={compareSectorTimes(
                     calculateLapTime(lap.driver1),
                     calculateLapTime(lap.driver2),
@@ -176,10 +176,11 @@ export const LapComparison: React.FC<Props> = ({ timingData, driver1, driver2, i
                 </td>
               </tr>
               {/* Driver 2 Row */}
-              <tr>
-                <td className="px-4 py-2 font-medium">{driver2.name_acronym}</td>
+              <tr className="hover:bg-gray-700 transition-colors">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{lap.lapNumber}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{driver2.name_acronym}</td>
                 {[1, 2, 3].map((sector) => (
-                  <td key={sector} className="px-4 py-2">
+                  <td key={sector} className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
                     <div className={compareSectorTimes(
                       lap.driver2[`sector${sector}` as keyof typeof lap.driver2],
                       lap.driver1[`sector${sector}` as keyof typeof lap.driver1],
@@ -197,7 +198,7 @@ export const LapComparison: React.FC<Props> = ({ timingData, driver1, driver2, i
                     </div>
                   </td>
                 ))}
-                <td className="px-4 py-2">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
                   <div className={compareSectorTimes(
                     calculateLapTime(lap.driver2),
                     calculateLapTime(lap.driver1),

@@ -3,5 +3,36 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gray-50;
+  @apply bg-gray-900;
+}
+
+select option {
+  @apply bg-gray-700 text-white py-2;
+}
+
+/* Add a subtle animation for loading states */
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+/* For Webkit browsers (Chrome, Safari) */
+select::-webkit-scrollbar {
+  @apply w-2;
+}
+
+select::-webkit-scrollbar-track {
+  @apply bg-gray-800;
+}
+
+select::-webkit-scrollbar-thumb {
+  @apply bg-gray-600 rounded-full hover:bg-gray-500;
 } 

@@ -38,39 +38,41 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4">
-      <h1 className="text-2xl font-bold my-4">F1 Live Battle</h1>
-      
-      <SessionSelector
-        sessions={sessions}
-        selectedSession={selectedSession}
-        onSelectSession={setSelectedSession}
-      />
-      
-      {selectedSession && (
-        <>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white py-8">
+      <div className="container mx-auto px-4 max-w-6xl">
+        <h1 className="text-4xl font-bold mb-8 text-center bg-clip-text text-transparent bg-gradient-to-r from-red-500 to-orange-500">F1 Live Battle</h1>
+        
+        <SessionSelector
+          sessions={sessions}
+          selectedSession={selectedSession}
+          onSelectSession={setSelectedSession}
+        />
+        
+        {selectedSession && (
+          <>
 
-          <DriverSelector
-            drivers={drivers}
-            selectedDriver1={selectedDriver1}
-            selectedDriver2={selectedDriver2}
-            onSelectDriver1={handleSelectDriver1}
-            onSelectDriver2={handleSelectDriver2}
-          />
+            <DriverSelector
+              drivers={drivers}
+              selectedDriver1={selectedDriver1}
+              selectedDriver2={selectedDriver2}
+              onSelectDriver1={handleSelectDriver1}
+              onSelectDriver2={handleSelectDriver2}
+            />
 
-          {selectedDriver1 && selectedDriver2 && (
-            <div className="mt-4">
-              <h2 className="text-xl font-semibold mb-4">Lap by Lap Comparison</h2>
-              <LapComparison 
-                timingData={timingData}
-                driver1={selectedDriver1}
-                driver2={selectedDriver2}
-                isLiveSession={selectedSession?.status === 'active'}
-              />
-            </div>
-          )}
-        </>
-      )}
+            {selectedDriver1 && selectedDriver2 && (
+              <div className="mt-4">
+                <h2 className="text-xl font-semibold mb-4">Lap by Lap Comparison</h2>
+                <LapComparison 
+                  timingData={timingData}
+                  driver1={selectedDriver1}
+                  driver2={selectedDriver2}
+                  isLiveSession={selectedSession?.status === 'active'}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }; 
