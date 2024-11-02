@@ -1,29 +1,37 @@
 import { useState, useEffect } from 'react';
 import { Driver, TimingData, Session } from '../types';
+import { cacheUtils } from '../utils/cache';
+
+const CACHE_KEYS = {
+  SESSIONS_2024: 'f1_sessions_2024',
+  DRIVERS: (sessionId: number) => `f1_drivers_${sessionId}`,
+  TIMING: (sessionId: number, driver1: number, driver2: number) => 
+    `f1_timing_${sessionId}_${Math.min(driver1, driver2)}_${Math.max(driver1, driver2)}`
+};
 
 const mapApiSessionToSession = (apiSession: any): Session | null => {
   if (!apiSession || typeof apiSession !== 'object') return null;
 
-  // Map API status to our status
+  // Determine status based on dates since API doesn't provide status
   let status = 'unknown';
-  if (apiSession.status) {
-    switch (apiSession.status.toLowerCase()) {
-      case 'completed':
-      case 'finished':
-        status = 'completed';
-        break;
-      case 'ongoing':
-      case 'started':
-        status = 'active';
-        break;
-      case 'scheduled':
-      case 'upcoming':
-        status = 'scheduled';
-        break;
-      default:
-        status = 'unknown';
-    }
+  const now = new Date();
+  const startDate = new Date(apiSession.date_start);
+  const endDate = new Date(apiSession.date_end);
+
+  if (now > endDate) {
+    status = 'completed';
+  } else if (now >= startDate && now <= endDate) {
+    status = 'active';
+  } else {
+    status = 'scheduled';
   }
+
+  console.log('Session status determined:', {
+    sessionId: apiSession.session_key,
+    startDate,
+    endDate,
+    status
+  });
 
   return {
     session_id: apiSession.session_key,
@@ -51,10 +59,10 @@ const formatTime = (seconds?: number): string => {
 
 export const useF1Data = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const [selectedSession, _setSelectedSession] = useState<Session | null>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [timingData, setTimingData] = useState<TimingData[]>([]);
-  const [selectedDrivers, setSelectedDrivers] = useState<{ driver1?: number; driver2?: number }>({});
+  const [selectedDrivers, setSelectedDrivers] = useState<{ driver1: number | null; driver2: number | null }>({ driver1: null, driver2: null });
   const [has2024Data, setHas2024Data] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -65,9 +73,25 @@ export const useF1Data = () => {
     const fetch2024Sessions = async () => {
       if (has2024Data) return;
       
+      // Try to get from cache first
+      const cachedSessions = cacheUtils.get<Session[]>(CACHE_KEYS.SESSIONS_2024);
+      if (cachedSessions) {
+        setSessions(prev => {
+          const uniqueSessions = [...prev, ...cachedSessions]
+            .filter((session, index, self) => 
+              index === self.findIndex((s) => s.session_id === session.session_id)
+            )
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          return uniqueSessions;
+        });
+        setHas2024Data(true);
+        return;
+      }
+
       try {
         const response = await fetch('/api/sessions?year=2024');
         const data = await response.json();
+        console.log('2024 Sessions API response:', data);
 
         if (!isMounted) return;
 
@@ -75,6 +99,9 @@ export const useF1Data = () => {
         const mapped2024Sessions = data2024Array
           .map(mapApiSessionToSession)
           .filter((session): session is Session => session !== null);
+
+        // Cache the results
+        cacheUtils.set(CACHE_KEYS.SESSIONS_2024, mapped2024Sessions);
 
         setSessions(prev => {
           const uniqueSessions = [...prev, ...mapped2024Sessions]
@@ -160,13 +187,19 @@ export const useF1Data = () => {
     if (!selectedSession) return;
 
     const fetchDrivers = async () => {
+      // Try to get from cache first
+      const cacheKey = CACHE_KEYS.DRIVERS(selectedSession.session_id);
+      const cachedDrivers = cacheUtils.get<Driver[]>(cacheKey);
+      
+      if (cachedDrivers) {
+        setDrivers(cachedDrivers);
+        return;
+      }
+
       try {
         const response = await fetch(`https://api.openf1.org/v1/drivers?session_key=${selectedSession.session_id}`);
-        console.log('Drivers response status:', response.status);
         const driversData = await response.json();
-        console.log('Drivers data:', driversData);
         
-        // Map the API response to our Driver interface
         const mappedDrivers = driversData
           .filter((d: any) => d && d.driver_number && d.full_name)
           .map((d: any) => ({
@@ -177,6 +210,8 @@ export const useF1Data = () => {
             session_id: selectedSession.session_id
           }));
 
+        // Cache the results
+        cacheUtils.set(cacheKey, mappedDrivers);
         setDrivers(mappedDrivers);
       } catch (error) {
         console.error('Error fetching drivers:', error);
@@ -194,18 +229,37 @@ export const useF1Data = () => {
 
     const fetchTimingData = async () => {
       setIsLoading(true);
+
+      // Only use cache for completed sessions with valid drivers
+      if (selectedSession.status === 'completed' && 
+          selectedDrivers.driver1 !== null && 
+          selectedDrivers.driver2 !== null) {
+        const cacheKey = CACHE_KEYS.TIMING(
+          selectedSession.session_id,
+          selectedDrivers.driver1,
+          selectedDrivers.driver2
+        );
+        
+        const cachedTiming = cacheUtils.get<TimingData[]>(cacheKey);
+        
+        if (cachedTiming) {
+          if (isMounted) {
+            setTimingData(cachedTiming);
+            setIsLoading(false);
+          }
+          return;
+        }
+      }
+
       try {
-        // Fetch lap times for each driver separately
         const [driver1Laps, driver2Laps] = await Promise.all([
-          fetch(`https://api.openf1.org/v1/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver1}`),
-          fetch(`https://api.openf1.org/v1/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver2}`)
+          fetch(`/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver1}`),
+          fetch(`/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver2}`)
         ]);
 
         const driver1Data = await driver1Laps.json();
         const driver2Data = await driver2Laps.json();
         const combinedLapsData = [...driver1Data, ...driver2Data];
-
-        console.log('Combined laps data:', combinedLapsData);
 
         if (!isMounted) return;
 
@@ -219,18 +273,37 @@ export const useF1Data = () => {
             sector_2_time: t.duration_sector_2,
             sector_3_time: t.duration_sector_3,
             lap_time: t.lap_duration,
+            gap_to_leader: t.gap_to_leader,
             session_id: selectedSession.session_id,
             timestamp: t.date
-          }));
+          }))
+          .sort((a, b) => a.lap_number - b.lap_number);
 
         if (isMounted) {
+          // Cache only completed sessions with valid drivers
+          if (selectedSession.status === 'completed' && 
+              selectedDrivers.driver1 !== null && 
+              selectedDrivers.driver2 !== null) {
+            const cacheKey = CACHE_KEYS.TIMING(
+              selectedSession.session_id,
+              selectedDrivers.driver1,
+              selectedDrivers.driver2
+            );
+            console.log('Setting timing cache:', {
+              sessionId: selectedSession.session_id,
+              status: selectedSession.status,
+              key: cacheKey,
+              dataLength: mappedTiming.length
+            });
+            cacheUtils.set(cacheKey, mappedTiming, 24 * 60 * 60 * 1000);
+          }
           setTimingData(mappedTiming);
         }
       } catch (error) {
         console.error('Error fetching timing data:', error);
         if (isMounted) setTimingData([]);
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     };
 
@@ -251,6 +324,10 @@ export const useF1Data = () => {
       if (timingInterval) clearInterval(timingInterval);
     };
   }, [selectedSession, selectedDrivers.driver1, selectedDrivers.driver2, sessions]);
+
+  const setSelectedSession = (session: Session | null) => {
+    _setSelectedSession(session);
+  };
 
   return { 
     sessions, 
