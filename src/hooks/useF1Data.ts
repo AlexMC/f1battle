@@ -6,7 +6,9 @@ const CACHE_KEYS = {
   SESSIONS_2024: 'f1_sessions_2024',
   DRIVERS: (sessionId: number) => `f1_drivers_${sessionId}`,
   DRIVER_TIMING: (sessionId: number, driverNumber: number) => 
-    `f1_timing_${sessionId}_${driverNumber}`
+    `f1_timing_${sessionId}_${driverNumber}`,
+  DRIVER_INTERVALS: (sessionId: number, driverNumber: number) =>
+    `f1_intervals_${sessionId}_${driverNumber}`
 };
 
 const mapApiSessionToSession = (apiSession: any): Session | null => {

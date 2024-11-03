@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Driver, IntervalData } from '../types';
 import { getTeamColor } from '../utils/colors';
 import { LoadingSpinner } from './LoadingSpinner';
+import { cacheUtils } from '../utils/cache';
 
 interface Props {
   sessionId: number;
@@ -10,6 +11,9 @@ interface Props {
   raceTime: number;
   isLiveSession: boolean;
 }
+
+const CACHE_KEY = (sessionId: number, driverNumber: number) =>
+  `f1_intervals_${sessionId}_${driverNumber}`;
 
 export const GapDisplay: React.FC<Props> = ({
   sessionId,
@@ -26,19 +30,38 @@ export const GapDisplay: React.FC<Props> = ({
   useEffect(() => {
     const fetchIntervalData = async () => {
       try {
-        const [driver1Data, driver2Data] = await Promise.all([
-          fetch(`/api/intervals?session_key=${sessionId}&driver_number=${driver1.driver_number}`),
-          fetch(`/api/intervals?session_key=${sessionId}&driver_number=${driver2.driver_number}`)
-        ]);
+        const driver1CacheKey = CACHE_KEY(sessionId, driver1.driver_number);
+        const driver2CacheKey = CACHE_KEY(sessionId, driver2.driver_number);
 
-        const [driver1Intervals, driver2Intervals] = await Promise.all([
-          driver1Data.json(),
-          driver2Data.json()
-        ]);
+        let driver1Intervals = cacheUtils.get<IntervalData[]>(driver1CacheKey);
+        let driver2Intervals = cacheUtils.get<IntervalData[]>(driver2CacheKey);
+
+        if (driver1Intervals) {
+          console.log(`Cache hit for driver ${driver1.driver_number} intervals`);
+        }
+        if (driver2Intervals) {
+          console.log(`Cache hit for driver ${driver2.driver_number} intervals`);
+        }
+
+        if (!driver1Intervals) {
+          const driver1Data = await fetch(`/api/intervals?session_key=${sessionId}&driver_number=${driver1.driver_number}`);
+          driver1Intervals = await driver1Data.json();
+          if (!isLiveSession) {
+            cacheUtils.set(driver1CacheKey, driver1Intervals, 24 * 60 * 60 * 1000);
+          }
+        }
+
+        if (!driver2Intervals) {
+          const driver2Data = await fetch(`/api/intervals?session_key=${sessionId}&driver_number=${driver2.driver_number}`);
+          driver2Intervals = await driver2Data.json();
+          if (!isLiveSession) {
+            cacheUtils.set(driver2CacheKey, driver2Intervals, 24 * 60 * 60 * 1000);
+          }
+        }
 
         setIntervalData({
-          [driver1.driver_number]: driver1Intervals,
-          [driver2.driver_number]: driver2Intervals
+          [driver1.driver_number]: driver1Intervals || [],
+          [driver2.driver_number]: driver2Intervals || []
         });
         setIsLoading(false);
       } catch (error) {
@@ -51,7 +74,6 @@ export const GapDisplay: React.FC<Props> = ({
       fetchIntervalData();
     }
 
-    // Set up polling for live sessions
     let pollInterval: number | null = null;
     if (isLiveSession) {
       pollInterval = setInterval(fetchIntervalData, 5000);
