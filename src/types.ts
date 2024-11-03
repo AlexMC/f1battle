@@ -41,4 +41,13 @@ export interface LapTimingStatus {
     sector2Visible: boolean;
     sector3Visible: boolean;
   };
+}
+
+export interface IntervalData {
+  date: string;
+  driver_number: number;
+  gap_to_leader: number;
+  interval: number;
+  meeting_key: number;
+  session_key: number;
 } 

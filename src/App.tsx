@@ -6,6 +6,7 @@ import { Driver, TimingData } from './types';
 import { LapComparison } from './components/LapComparison';
 import { SessionHeader } from './components/SessionHeader';
 import { SimulationControls } from './components/SimulationControls';
+import { GapDisplay } from './components/GapDisplay';
 
 export const App: React.FC = () => {
   const { sessions, selectedSession, setSelectedSession, drivers, timingData, setSelectedDrivers, isLoading } = useF1Data();
@@ -104,6 +105,13 @@ export const App: React.FC = () => {
                         raceTime={currentRaceTime}
                       />
                     )}
+                    <GapDisplay
+                      sessionId={selectedSession.session_id}
+                      driver1={selectedDriver1}
+                      driver2={selectedDriver2}
+                      raceTime={currentRaceTime}
+                      isLiveSession={selectedSession?.status === 'active'}
+                    />
                     <LapComparison 
                       timingData={timingData}
                       driver1={selectedDriver1}
