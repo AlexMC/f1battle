@@ -207,19 +207,20 @@ export const LapComparison: React.FC<Props> = ({
             <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">Lap Time</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-700 bg-gray-800">
+        <tbody className="divide-y divide-gray-600">
           {lapData.map((lap) => (
             <React.Fragment key={lap.lapNumber}>
-              {/* Driver 1 Row */}
               <tr className="hover:bg-gray-700 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{lap.lapNumber}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                <td rowSpan={2} className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 text-center align-middle bg-gray-750">
+                  {lap.lapNumber}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm border-b border-gray-700">
                   <span className={`${getTeamColor(driver1.team_name)} font-semibold`}>
                     {driver1.name_acronym} ({driver1.driver_number})
                   </span>
                 </td>
                 {[1, 2, 3].map((sector) => (
-                  <td key={sector} className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
+                  <td key={sector} className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 border-b border-gray-700">
                     <div className={compareSectorTimes(
                       lap.driver1[`sector${sector}` as keyof typeof lap.driver1],
                       lap.driver2[`sector${sector}` as keyof typeof lap.driver2],
@@ -237,7 +238,7 @@ export const LapComparison: React.FC<Props> = ({
                     </div>
                   </td>
                 ))}
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 border-b border-gray-700">
                   <div className={compareSectorTimes(
                     calculateLapTime(lap.driver1),
                     calculateLapTime(lap.driver2),
@@ -245,18 +246,11 @@ export const LapComparison: React.FC<Props> = ({
                     3,
                     visibleTiming
                   )}>
-                    {formatLapTime(
-                      lap.driver1,
-                      lap.lapNumber,
-                      1,
-                      visibleTiming
-                    )}
+                    {formatLapTime(lap.driver1, lap.lapNumber, 1, visibleTiming)}
                   </div>
                 </td>
               </tr>
-              {/* Driver 2 Row */}
-              <tr className="hover:bg-gray-700 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">{lap.lapNumber}</td>
+              <tr className="hover:bg-gray-700 transition-colors border-b border-gray-500">
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <span className={`${getTeamColor(driver2.team_name)} font-semibold`}>
                     {driver2.name_acronym} ({driver2.driver_number})

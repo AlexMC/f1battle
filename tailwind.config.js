@@ -7,6 +7,7 @@ export default {
   theme: {
     extend: {
       colors: {
+        'gray-750': '#2D3748',
         'f1-red': '#e10600',
         'f1-dark': '#15151e',
       },
