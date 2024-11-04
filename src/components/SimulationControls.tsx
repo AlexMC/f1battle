@@ -6,6 +6,7 @@ interface Props {
   raceTime: number;
   isPaused: boolean;
   onPauseChange: (paused: boolean) => void;
+  sessionStartDate: string;
 }
 
 const formatRaceTime = (seconds: number): string => {
@@ -21,9 +22,13 @@ export const SimulationControls: React.FC<Props> = ({
   onSpeedChange, 
   raceTime,
   isPaused,
-  onPauseChange
+  onPauseChange,
+  sessionStartDate
 }) => {
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState(() => {
+    const startDate = new Date(sessionStartDate);
+    return new Date(startDate.getTime() + (raceTime * 1000));
+  });
   const lastUpdateRef = useRef(Date.now());
 
   useEffect(() => {
@@ -48,6 +53,11 @@ export const SimulationControls: React.FC<Props> = ({
       if (timer) clearInterval(timer);
     };
   }, [isPaused, speed]);
+
+  useEffect(() => {
+    const startDate = new Date(sessionStartDate);
+    setCurrentTime(new Date(startDate.getTime() + (raceTime * 1000)));
+  }, [raceTime, sessionStartDate]);
 
   const handleSpeedChange = (increment: boolean) => {
     const newSpeed = increment ? Math.min(speed + 1, 20) : Math.max(speed - 1, 1);

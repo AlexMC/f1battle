@@ -107,6 +107,7 @@ export const App: React.FC = () => {
                         raceTime={currentRaceTime}
                         isPaused={isPaused}
                         onPauseChange={setIsPaused}
+                        sessionStartDate={selectedSession.date}
                       />
                     )}
                     <GapDisplay
