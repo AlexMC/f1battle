@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Driver, IntervalData } from '../types';
 import { getTeamColor } from '../utils/colors';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -10,6 +10,7 @@ interface Props {
   driver2: Driver;
   raceTime: number;
   isLiveSession: boolean;
+  localTime: Date;
 }
 
 const CACHE_KEY = (sessionId: number, driverNumber: number) =>
@@ -20,12 +21,79 @@ export const GapDisplay: React.FC<Props> = ({
   driver1,
   driver2,
   raceTime,
-  isLiveSession
+  isLiveSession,
+  localTime
 }) => {
-  const [intervalData, setIntervalData] = useState<{
-    [key: number]: IntervalData[]
-  }>({});
+  const [intervalData, setIntervalData] = useState<{[key: number]: IntervalData[]}>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [currentGap, setCurrentGap] = useState<ReturnType<typeof getCurrentGap>>(null);
+
+  const findIntervalAtTime = (intervals: IntervalData[]): IntervalData | null => {
+    if (!intervals.length) return null;
+    
+    const sessionStartTime = localTime.getTime() - (raceTime * 1000);
+    
+    const sortedIntervals = [...intervals].sort((a, b) => {
+      const timeA = new Date(a.date.replace('+00:00', 'Z')).getTime() - sessionStartTime;
+      const timeB = new Date(b.date.replace('+00:00', 'Z')).getTime() - sessionStartTime;
+      return timeA - timeB;
+    });
+
+    let closestInterval = sortedIntervals[0];
+    let minTimeDiff = Math.abs(
+      (new Date(closestInterval.date.replace('+00:00', 'Z')).getTime() - sessionStartTime) / 1000 - raceTime
+    );
+
+    for (const interval of sortedIntervals) {
+      const intervalRaceTime = (new Date(interval.date.replace('+00:00', 'Z')).getTime() - sessionStartTime) / 1000;
+      const timeDiff = Math.abs(intervalRaceTime - raceTime);
+      
+      if (timeDiff < minTimeDiff) {
+        minTimeDiff = timeDiff;
+        closestInterval = interval;
+      }
+    }
+    
+    return closestInterval;
+  };
+
+  const getCurrentGap = useCallback(() => {
+    const driver1Intervals = intervalData[driver1.driver_number] || [];
+    const driver2Intervals = intervalData[driver2.driver_number] || [];
+
+    if (!driver1Intervals.length || !driver2Intervals.length) return null;
+
+    if (isLiveSession) {
+      const latestDriver1 = driver1Intervals[driver1Intervals.length - 1];
+      const latestDriver2 = driver2Intervals[driver2Intervals.length - 1];
+      const gap = Math.abs(latestDriver1.gap_to_leader - latestDriver2.gap_to_leader);
+      return {
+        gap,
+        ahead: latestDriver1.gap_to_leader < latestDriver2.gap_to_leader ? driver1 : driver2,
+        behind: latestDriver1.gap_to_leader < latestDriver2.gap_to_leader ? driver2 : driver1
+      };
+    }
+
+    const driver1Interval = findIntervalAtTime(driver1Intervals);
+    const driver2Interval = findIntervalAtTime(driver2Intervals);
+
+    if (!driver1Interval || !driver2Interval) return null;
+
+    if (typeof driver1Interval.gap_to_leader !== 'number' || 
+        typeof driver2Interval.gap_to_leader !== 'number') {
+      return null;
+    }
+
+    const gap = Math.abs(driver1Interval.gap_to_leader - driver2Interval.gap_to_leader);
+
+    if (gap === 0 || isNaN(gap)) return null;
+
+    return {
+      gap,
+      ahead: driver1Interval.gap_to_leader < driver2Interval.gap_to_leader ? driver1 : driver2,
+      behind: driver1Interval.gap_to_leader < driver2Interval.gap_to_leader ? driver2 : driver1
+    };
+  }, [intervalData, driver1, driver2, isLiveSession, localTime]);
 
   useEffect(() => {
     const fetchIntervalData = async () => {
@@ -35,13 +103,6 @@ export const GapDisplay: React.FC<Props> = ({
 
         let driver1Intervals = cacheUtils.get<IntervalData[]>(driver1CacheKey);
         let driver2Intervals = cacheUtils.get<IntervalData[]>(driver2CacheKey);
-
-        if (driver1Intervals) {
-          console.log(`Cache hit for driver ${driver1.driver_number} intervals`);
-        }
-        if (driver2Intervals) {
-          console.log(`Cache hit for driver ${driver2.driver_number} intervals`);
-        }
 
         if (!driver1Intervals) {
           const driver1Data = await fetch(`/api/intervals?session_key=${sessionId}&driver_number=${driver1.driver_number}`);
@@ -84,70 +145,29 @@ export const GapDisplay: React.FC<Props> = ({
     };
   }, [sessionId, driver1.driver_number, driver2.driver_number, isLiveSession]);
 
+  useEffect(() => {
+    const gap = getCurrentGap();
+    setCurrentGap(gap);
+  }, [localTime, intervalData, getCurrentGap]);
+
   if (isLoading) {
     return <LoadingSpinner />;
   }
 
-  const getCurrentGap = () => {
-    const driver1Intervals = intervalData[driver1.driver_number] || [];
-    const driver2Intervals = intervalData[driver2.driver_number] || [];
-
-    if (!driver1Intervals.length || !driver2Intervals.length) return null;
-
-    // For live sessions, get the latest interval
-    if (isLiveSession) {
-      const latestDriver1 = driver1Intervals[driver1Intervals.length - 1];
-      const latestDriver2 = driver2Intervals[driver2Intervals.length - 1];
-      const gap = Math.abs(latestDriver1.gap_to_leader - latestDriver2.gap_to_leader);
-      return {
-        gap,
-        ahead: latestDriver1.gap_to_leader < latestDriver2.gap_to_leader ? driver1 : driver2,
-        behind: latestDriver1.gap_to_leader < latestDriver2.gap_to_leader ? driver2 : driver1
-      };
-    }
-
-    // For replay, find the appropriate interval based on race time
-    const findIntervalAtTime = (intervals: IntervalData[], targetTime: number) => {
-      const sessionStart = new Date(intervals[0].date).getTime();
-      const targetDate = new Date(sessionStart + targetTime * 1000).getTime();
-      
-      // Find the last interval before or at the target time
-      return intervals.reduce((closest, current) => {
-        const intervalDate = new Date(current.date).getTime();
-        if (intervalDate <= targetDate) return current;
-        return closest;
-      }, intervals[intervals.length - 1]);
-    };
-
-    const driver1Interval = findIntervalAtTime(driver1Intervals, raceTime);
-    const driver2Interval = findIntervalAtTime(driver2Intervals, raceTime);
-
-    if (!driver1Interval || !driver2Interval) return null;
-
-    const gap = Math.abs(driver1Interval.gap_to_leader - driver2Interval.gap_to_leader);
-    return {
-      gap,
-      ahead: driver1Interval.gap_to_leader < driver2Interval.gap_to_leader ? driver1 : driver2,
-      behind: driver1Interval.gap_to_leader < driver2Interval.gap_to_leader ? driver2 : driver1
-    };
-  };
-
-  const gapInfo = getCurrentGap();
-
-  if (!gapInfo) return null;
+  if (!currentGap) return null;
 
   return (
     <div className="flex items-center justify-center gap-4 p-4 bg-gray-800 rounded-lg shadow-xl">
-      <span className={`${getTeamColor(gapInfo.behind.team_name)} font-semibold`}>
-        {gapInfo.behind.name_acronym}
+      <span className={`${getTeamColor(currentGap.behind.team_name)} font-semibold`}>
+        {currentGap.behind.name_acronym}
       </span>
       <span className="text-gray-400">&gt;&gt;</span>
       <span className="font-mono text-white">
-        {gapInfo.gap.toFixed(3)}s
+        {currentGap.gap.toFixed(3)}s
       </span>
       <span className="text-gray-400">&gt;&gt;</span>
-      <span className={`${getTeamColor(gapInfo.ahead.team_name)} font-semibold`}>
-        {gapInfo.ahead.name_acronym}
+      <span className={`${getTeamColor(currentGap.ahead.team_name)} font-semibold`}>
+        {currentGap.ahead.name_acronym}
       </span>
     </div>
   );

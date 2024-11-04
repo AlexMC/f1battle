@@ -95,7 +95,8 @@ export const App: React.FC = () => {
                       driver1={selectedDriver1}
                       driver2={selectedDriver2}
                       raceTime={timeline.raceTime}
-                      isLiveSession={selectedSession?.status === 'active'}
+                      isLiveSession={isLiveSession}
+                      localTime={timeline.localTime}
                     />
                     <TeamRadioManager
                       sessionId={selectedSession.session_id}
