@@ -59,4 +59,12 @@ export interface TeamRadio {
   recording_url: string;
   session_key: number;
   race_time: number;
+}
+
+export interface PositionData {
+  date: string;
+  driver_number: number;
+  meeting_key: number;
+  position: number;
+  session_key: number;
 } 
