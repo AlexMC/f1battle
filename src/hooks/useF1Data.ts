@@ -47,6 +47,38 @@ const mapApiSessionToSession = (apiSession: any): Session | null => {
   };
 };
 
+const calculateSessionStartTime = (timingData: TimingData[]): Date | null => {
+  const lap2RawData = timingData.filter(t => t.lap_number === 2);
+  const sortedData = [...timingData].sort((a, b) => 
+    a.lap_number - b.lap_number || 
+    (a.timestamp - b.timestamp)
+  );
+
+  const lap2Data = sortedData.find(t => t.lap_number === 2);
+
+  if (!lap2Data || !lap2Data.timestamp || !lap2Data.sector_2_time || !lap2Data.sector_3_time) {
+    return null;
+  }
+
+  const lap2Time = new Date(lap2Data.timestamp);
+  const sectorsDuration = (lap2Data.sector_2_time + lap2Data.sector_3_time) * 1000;
+  const calculatedTime = new Date(lap2Time.getTime() - sectorsDuration);
+  
+  return calculatedTime;
+};
+
+const mapLapDataToTimingData = (t: any, sessionId: number) => ({
+  driver_number: t.driver_number,
+  lap_number: t.lap_number,
+  sector_1_time: t.duration_sector_1,
+  sector_2_time: t.duration_sector_2,
+  sector_3_time: t.duration_sector_3,
+  lap_time: t.lap_duration,
+  gap_to_leader: t.gap_to_leader,
+  session_id: sessionId,
+  timestamp: t.date_start ? new Date(t.date_start).getTime() : 0
+});
+
 export const useF1Data = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSession, _setSelectedSession] = useState<Session | null>(null);
@@ -55,6 +87,7 @@ export const useF1Data = () => {
   const [selectedDrivers, setSelectedDrivers] = useState<{ driver1: number | null; driver2: number | null }>({ driver1: null, driver2: null });
   const [has2024Data, setHas2024Data] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
 
   // Separate effect for fetching 2024 sessions (one-time)
   useEffect(() => {
@@ -250,17 +283,7 @@ export const useF1Data = () => {
           if (!cachedDriver1) {
             const driver1Response = await fetch(`/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver1}`);
             const rawDriver1Data = await driver1Response.json();
-            driver1Data = Array.isArray(rawDriver1Data) ? rawDriver1Data.map((t: any) => ({
-              driver_number: t.driver_number,
-              lap_number: t.lap_number,
-              sector_1_time: t.duration_sector_1,
-              sector_2_time: t.duration_sector_2,
-              sector_3_time: t.duration_sector_3,
-              lap_time: t.lap_duration,
-              gap_to_leader: t.gap_to_leader,
-              session_id: selectedSession.session_id,
-              timestamp: t.date
-            })) : [];
+            driver1Data = Array.isArray(rawDriver1Data) ? rawDriver1Data.map(t => mapLapDataToTimingData(t, selectedSession.session_id)) : [];
             if (selectedSession.status === 'completed') {
               cacheUtils.set(driver1CacheKey, driver1Data, 24 * 60 * 60 * 1000);
             }
@@ -269,16 +292,7 @@ export const useF1Data = () => {
           if (!cachedDriver2) {
             const driver2Response = await fetch(`/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver2}`);
             const rawDriver2Data = await driver2Response.json();
-            driver2Data = Array.isArray(rawDriver2Data) ? rawDriver2Data.map((t: any) => ({
-              driver_number: t.driver_number,
-              lap_number: t.lap_number,
-              sector_1_time: t.duration_sector_1,
-              sector_2_time: t.duration_sector_2,
-              sector_3_time: t.duration_sector_3,
-              lap_time: t.lap_duration,
-              session_id: selectedSession.session_id,
-              timestamp: t.date
-            })) : [];
+            driver2Data = Array.isArray(rawDriver2Data) ? rawDriver2Data.map(t => mapLapDataToTimingData(t, selectedSession.session_id)) : [];
             if (selectedSession.status === 'completed') {
               cacheUtils.set(driver2CacheKey, driver2Data, 24 * 60 * 60 * 1000);
             }
@@ -315,6 +329,20 @@ export const useF1Data = () => {
     };
   }, [selectedSession, selectedDrivers.driver1, selectedDrivers.driver2, sessions]);
 
+  // Add this effect to calculate session start time when timing data changes
+  useEffect(() => {
+    if (!selectedSession || !timingData.length) return;
+
+    if (selectedSession.status === 'active') {
+      const startTime = new Date(selectedSession.date);
+      setSessionStartTime(startTime);
+    } else {
+      const calculatedStartTime = calculateSessionStartTime(timingData);
+      const finalStartTime = calculatedStartTime || new Date(selectedSession.date);
+      setSessionStartTime(finalStartTime);
+    }
+  }, [selectedSession, timingData]);
+
   const setSelectedSession = (session: Session | null) => {
     _setSelectedSession(session);
   };
@@ -326,6 +354,7 @@ export const useF1Data = () => {
     drivers, 
     timingData,
     setSelectedDrivers,
-    isLoading 
+    isLoading,
+    sessionStartTime
   };
 }; 

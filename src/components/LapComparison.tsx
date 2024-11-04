@@ -9,11 +9,8 @@ interface Props {
   driver1: Driver;
   driver2: Driver;
   isLiveSession: boolean;
-  simulationSpeed: number;
   isLoading: boolean;
-  isSimulationStarted: boolean;
-  isPaused: boolean;
-  onRaceTimeUpdate: (time: number) => void;
+  raceTime: number;
 }
 
 interface LapComparisonData {
@@ -60,25 +57,16 @@ export const LapComparison: React.FC<Props> = ({
   driver1, 
   driver2, 
   isLiveSession, 
-  simulationSpeed,
   isLoading,
-  isSimulationStarted,
-  isPaused,
-  onRaceTimeUpdate 
+  raceTime
 }) => {
-  const { visibleTiming, isSimulationInitialized, raceTime } = useTimingSimulation(
+  const { visibleTiming, isSimulationInitialized } = useTimingSimulation(
     timingData, 
     isLiveSession,
     driver1.driver_number.toString(),
     driver2.driver_number.toString(),
-    simulationSpeed,
-    isSimulationStarted,
-    isPaused
+    raceTime
   );
-
-  useEffect(() => {
-    onRaceTimeUpdate(raceTime);
-  }, [raceTime, onRaceTimeUpdate]);
 
   if (isLoading) {
     return <LoadingSpinner />;

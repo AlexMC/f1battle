@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TeamRadio, Driver } from '../types';
 import { TeamRadioModal } from './TeamRadioModal';
 import { cacheUtils } from '../utils/cache';
@@ -7,6 +7,13 @@ interface Props {
   sessionId: number;
   driver1: Driver;
   driver2: Driver;
+  raceTime: number;
+  localTime: Date;
+  sessionStartTime: Date;
+}
+
+interface VisibleMessage extends TeamRadio {
+  driver: Driver;
   raceTime: number;
 }
 
@@ -17,11 +24,16 @@ export const TeamRadioManager: React.FC<Props> = ({
   sessionId,
   driver1,
   driver2,
-  raceTime
+  raceTime,
+  localTime,
+  sessionStartTime
 }) => {
   const [teamRadios, setTeamRadios] = useState<TeamRadio[]>([]);
-  const [activeModals, setActiveModals] = useState<(TeamRadio & { uniqueId: string; raceTime: number })[]>([]);
-  const [shownMessageIds, setShownMessageIds] = useState<Set<string>>(new Set());
+  const [visibleMessages, setVisibleMessages] = useState<VisibleMessage[]>([]);
+  const [dismissedMessageIds, setDismissedMessageIds] = useState<Set<string>>(new Set());
+  const [isLoading, setIsLoading] = useState(true);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [currentMessage, setCurrentMessage] = useState<VisibleMessage | null>(null);
 
   useEffect(() => {
     const fetchTeamRadios = async () => {
@@ -64,57 +76,46 @@ export const TeamRadioManager: React.FC<Props> = ({
   }, [sessionId, driver1.driver_number, driver2.driver_number]);
 
   useEffect(() => {
-    if (teamRadios.length === 0) return;
-    
-    const sessionStart = new Date(teamRadios[0].date).getTime();
-    const currentTime = sessionStart + (raceTime * 1000);
+    if (!teamRadios.length) return;
 
-    const newRadios = teamRadios.filter(radio => {
-      const radioTime = new Date(radio.date).getTime();
-      const messageId = `${radio.date}_${radio.driver_number}`;
-      const shouldShow = radioTime <= currentTime && !shownMessageIds.has(messageId);
-      
-      if (shouldShow) {
-        console.log('New radio message found:', {
-          driver: radio.driver_number,
-          time: new Date(radio.date).toISOString()
-        });
-      }
-      
-      return shouldShow;
-    });
+    const uniqueMessages = new Map();
 
-    if (newRadios.length > 0) {
-      const sessionStart = new Date(teamRadios[0].date).getTime();
-      const newMessageIds = newRadios.map(radio => `${radio.date}_${radio.driver_number}`);
-      setShownMessageIds(prev => new Set([...prev, ...newMessageIds]));
-      
-      setActiveModals(prev => [
-        ...prev,
-        ...newRadios.map((radio, index) => ({
-          ...radio,
-          uniqueId: `${radio.date}_${radio.driver_number}_${prev.length + index}`,
-          raceTime: (new Date(radio.date).getTime() - sessionStart) / 1000
-        }))
-      ]);
-    }
-  }, [raceTime, teamRadios]);
+    teamRadios
+      .filter(radio => {
+        const messageRaceTime = (new Date(radio.date).getTime() - sessionStartTime.getTime()) / 1000;
+        return messageRaceTime <= raceTime && !dismissedMessageIds.has(`${radio.date}_${radio.driver_number}`);
+      })
+      .forEach((radio, index) => {
+        const key = `${radio.date}_${radio.driver_number}_${index}`;
+        if (!uniqueMessages.has(key)) {
+          uniqueMessages.set(key, {
+            ...radio,
+            driver: radio.driver_number === driver1.driver_number ? driver1 : driver2,
+            raceTime: (new Date(radio.date).getTime() - sessionStartTime.getTime()) / 1000
+          });
+        }
+      });
+
+    setVisibleMessages(Array.from(uniqueMessages.values()));
+  }, [raceTime, teamRadios, driver1, driver2, dismissedMessageIds, sessionStartTime]);
+
+  const handleDismissMessage = (radio: VisibleMessage) => {
+    const messageId = `${radio.date}_${radio.driver_number}`;
+    setDismissedMessageIds(prev => new Set([...prev, messageId]));
+  };
 
   return (
     <div className="fixed right-4 bottom-4 z-[9999] w-[400px]">
       <div className="flex flex-col-reverse items-end">
-        {activeModals.map((radio) => {
-          const driver = radio.driver_number === driver1.driver_number ? driver1 : driver2;
-          return (
-            <TeamRadioModal
-              key={radio.uniqueId}
-              radio={radio}
-              driver={driver}
-              raceTime={radio.raceTime}
-              onClose={() => setActiveModals(prev => prev.filter(r => r.uniqueId !== radio.uniqueId))}
-            />
-          );
-        })}
+        {visibleMessages.map((radio) => (
+          <TeamRadioModal
+            key={`${radio.date}_${radio.driver_number}_${visibleMessages.indexOf(radio)}`}
+            radio={radio}
+            driver={radio.driver}
+            raceTime={radio.raceTime}
+            onClose={() => handleDismissMessage(radio)}
+          />
+        ))}
       </div>
     </div>
   );
