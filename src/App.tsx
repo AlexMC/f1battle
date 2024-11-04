@@ -19,23 +19,6 @@ export const App: React.FC = () => {
   const [currentRaceTime, setCurrentRaceTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
-  const getLatestDriverTiming = (driverNumber: number) => {
-    return timingData
-      .filter(t => t.driver_number === driverNumber)
-      .sort((a, b) => b.lap_number - a.lap_number)[0];
-  };
-
-  const calculateGap = () => {
-    if (!selectedDriver1 || !selectedDriver2) return null;
-    
-    const timing1 = getLatestDriverTiming(selectedDriver1.driver_number);
-    const timing2 = getLatestDriverTiming(selectedDriver2.driver_number);
-    
-    if (!timing1 || !timing2) return null;
-    
-    return Math.abs((timing1.gap_to_leader || 0) - (timing2.gap_to_leader || 0));
-  };
-
   const handleSelectDriver1 = (driver: Driver) => {
     setSelectedDriver1(driver);
     setSelectedDrivers(prev => ({ ...prev, driver1: driver.driver_number }));

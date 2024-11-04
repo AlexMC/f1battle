@@ -47,18 +47,6 @@ const mapApiSessionToSession = (apiSession: any): Session | null => {
   };
 };
 
-const formatTime = (seconds?: number): string => {
-  if (!seconds) return '-';
-  
-  if (seconds >= 60) {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = (seconds % 60).toFixed(3);
-    return `${minutes}:${remainingSeconds.padStart(6, '0')}`;
-  }
-  
-  return seconds.toFixed(3);
-};
-
 export const useF1Data = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSession, _setSelectedSession] = useState<Session | null>(null);
@@ -288,7 +276,6 @@ export const useF1Data = () => {
               sector_2_time: t.duration_sector_2,
               sector_3_time: t.duration_sector_3,
               lap_time: t.lap_duration,
-              gap_to_leader: t.gap_to_leader,
               session_id: selectedSession.session_id,
               timestamp: t.date
             })) : [];
