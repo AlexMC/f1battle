@@ -9,6 +9,7 @@ interface Props {
   driver2: Driver;
   raceTime: number;
   localTime: Date;
+  sessionStartTime: Date;
 }
 
 interface VisibleMessage extends TeamRadio {
@@ -24,7 +25,8 @@ export const TeamRadioManager: React.FC<Props> = ({
   driver1,
   driver2,
   raceTime,
-  localTime
+  localTime,
+  sessionStartTime
 }) => {
   const [teamRadios, setTeamRadios] = useState<TeamRadio[]>([]);
   const [visibleMessages, setVisibleMessages] = useState<VisibleMessage[]>([]);
@@ -76,16 +78,12 @@ export const TeamRadioManager: React.FC<Props> = ({
   useEffect(() => {
     if (!teamRadios.length) return;
 
-    const sessionStart = new Date(teamRadios[0].date).getTime();
-    const currentTime = localTime.getTime();
-
-    // Create a map to track unique messages by time and driver
     const uniqueMessages = new Map();
 
     teamRadios
       .filter(radio => {
-        const messageTime = new Date(radio.date).getTime();
-        return messageTime <= currentTime && !dismissedMessageIds.has(`${radio.date}_${radio.driver_number}`);
+        const messageRaceTime = (new Date(radio.date).getTime() - sessionStartTime.getTime()) / 1000;
+        return messageRaceTime <= raceTime && !dismissedMessageIds.has(`${radio.date}_${radio.driver_number}`);
       })
       .forEach((radio, index) => {
         const key = `${radio.date}_${radio.driver_number}_${index}`;
@@ -93,13 +91,13 @@ export const TeamRadioManager: React.FC<Props> = ({
           uniqueMessages.set(key, {
             ...radio,
             driver: radio.driver_number === driver1.driver_number ? driver1 : driver2,
-            raceTime: (new Date(radio.date).getTime() - sessionStart) / 1000
+            raceTime: (new Date(radio.date).getTime() - sessionStartTime.getTime()) / 1000
           });
         }
       });
 
     setVisibleMessages(Array.from(uniqueMessages.values()));
-  }, [raceTime, teamRadios, localTime, driver1, driver2, dismissedMessageIds]);
+  }, [raceTime, teamRadios, driver1, driver2, dismissedMessageIds, sessionStartTime]);
 
   const handleDismissMessage = (radio: VisibleMessage) => {
     const messageId = `${radio.date}_${radio.driver_number}`;

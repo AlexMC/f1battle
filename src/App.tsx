@@ -104,6 +104,7 @@ export const App: React.FC = () => {
                       driver2={selectedDriver2}
                       raceTime={timeline.raceTime}
                       localTime={timeline.localTime}
+                      sessionStartTime={timeline.sessionStartTime}
                     />
                     <LapComparison 
                       timingData={timingData}
