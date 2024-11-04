@@ -97,6 +97,7 @@ export const App: React.FC = () => {
                       raceTime={timeline.raceTime}
                       isLiveSession={isLiveSession}
                       localTime={timeline.localTime}
+                      sessionStartTime={timeline.sessionStartTime}
                     />
                     <TeamRadioManager
                       sessionId={selectedSession.session_id}
@@ -110,7 +111,7 @@ export const App: React.FC = () => {
                       timingData={timingData}
                       driver1={selectedDriver1}
                       driver2={selectedDriver2}
-                      isLiveSession={selectedSession?.status === 'active'}
+                      isLiveSession={isLiveSession}
                       isLoading={isLoading}
                       raceTime={timeline.raceTime}
                     />

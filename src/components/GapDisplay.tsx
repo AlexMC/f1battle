@@ -11,6 +11,7 @@ interface Props {
   raceTime: number;
   isLiveSession: boolean;
   localTime: Date;
+  sessionStartTime: Date;
 }
 
 const CACHE_KEY = (sessionId: number, driverNumber: number) =>
@@ -22,7 +23,8 @@ export const GapDisplay: React.FC<Props> = ({
   driver2,
   raceTime,
   isLiveSession,
-  localTime
+  localTime,
+  sessionStartTime
 }) => {
   const [intervalData, setIntervalData] = useState<{[key: number]: IntervalData[]}>({});
   const [isLoading, setIsLoading] = useState(true);
