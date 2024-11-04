@@ -8,16 +8,16 @@ import { SessionHeader } from './components/SessionHeader';
 import { SimulationControls } from './components/SimulationControls';
 import { GapDisplay } from './components/GapDisplay';
 import { TeamRadioManager } from './components/TeamRadioManager';
+import { useTimelineManager } from './hooks/useTimelineManager';
 
 export const App: React.FC = () => {
   const { sessions, selectedSession, setSelectedSession, drivers, timingData, setSelectedDrivers, isLoading } = useF1Data();
   const [selectedDriver1, setSelectedDriver1] = useState<Driver | null>(null);
   const [selectedDriver2, setSelectedDriver2] = useState<Driver | null>(null);
   const [isSelectionCollapsed, setIsSelectionCollapsed] = useState(false);
-  const [simulationSpeed, setSimulationSpeed] = useState(1);
-  const [isSimulationStarted, setIsSimulationStarted] = useState(false);
-  const [currentRaceTime, setCurrentRaceTime] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
+
+  const isLiveSession = selectedSession?.status === 'active';
+  const timeline = useTimelineManager(selectedSession, isLiveSession);
 
   const handleSelectDriver1 = (driver: Driver) => {
     setSelectedDriver1(driver);
@@ -31,8 +31,7 @@ export const App: React.FC = () => {
 
   const handleConfirmSelection = () => {
     setIsSelectionCollapsed(true);
-    setIsSimulationStarted(true);
-    setCurrentRaceTime(0);
+    timeline.setPaused(false);
   };
 
   return (
@@ -67,55 +66,50 @@ export const App: React.FC = () => {
               />
             )}
 
-            {selectedDriver1 && selectedDriver2 && !isSelectionCollapsed && (
-              <div className="flex justify-end mb-8">
-                <button
-                  onClick={handleConfirmSelection}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                >
-                  Start Simulation
-                </button>
-              </div>
-            )}
-
             {selectedDriver1 && selectedDriver2 && (
               <div className="mt-4">
-                {isSimulationStarted && (
+                {!isSelectionCollapsed && (
+                  <div className="flex justify-end mb-8">
+                    <button
+                      onClick={handleConfirmSelection}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    >
+                      Start Simulation
+                    </button>
+                  </div>
+                )}
+
+                {isSelectionCollapsed && (
                   <>
                     <h2 className="text-xl font-semibold mb-4">Lap by Lap Comparison</h2>
-                    {selectedSession?.status !== 'active' && (
-                      <SimulationControls 
-                        speed={simulationSpeed}
-                        onSpeedChange={setSimulationSpeed}
-                        raceTime={currentRaceTime}
-                        isPaused={isPaused}
-                        onPauseChange={setIsPaused}
-                        sessionStartDate={selectedSession.date}
-                      />
-                    )}
+                    <SimulationControls 
+                      speed={timeline.speed}
+                      onSpeedChange={timeline.setSpeed}
+                      raceTime={timeline.raceTime}
+                      isPaused={timeline.isPaused}
+                      onPauseChange={timeline.setPaused}
+                      localTime={timeline.localTime}
+                    />
                     <GapDisplay
                       sessionId={selectedSession.session_id}
                       driver1={selectedDriver1}
                       driver2={selectedDriver2}
-                      raceTime={currentRaceTime}
+                      raceTime={timeline.raceTime}
                       isLiveSession={selectedSession?.status === 'active'}
                     />
                     <TeamRadioManager
                       sessionId={selectedSession.session_id}
                       driver1={selectedDriver1}
                       driver2={selectedDriver2}
-                      raceTime={currentRaceTime}
+                      raceTime={timeline.raceTime}
                     />
                     <LapComparison 
                       timingData={timingData}
                       driver1={selectedDriver1}
                       driver2={selectedDriver2}
                       isLiveSession={selectedSession?.status === 'active'}
-                      simulationSpeed={simulationSpeed}
                       isLoading={isLoading}
-                      isSimulationStarted={isSimulationStarted}
-                      onRaceTimeUpdate={setCurrentRaceTime}
-                      isPaused={isPaused}
+                      raceTime={timeline.raceTime}
                     />
                   </>
                 )}

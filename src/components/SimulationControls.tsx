@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 
 interface Props {
   speed: number;
@@ -6,7 +6,7 @@ interface Props {
   raceTime: number;
   isPaused: boolean;
   onPauseChange: (paused: boolean) => void;
-  sessionStartDate: string;
+  localTime: Date;
 }
 
 const formatRaceTime = (seconds: number): string => {
@@ -23,42 +23,8 @@ export const SimulationControls: React.FC<Props> = ({
   raceTime,
   isPaused,
   onPauseChange,
-  sessionStartDate
+  localTime
 }) => {
-  const [currentTime, setCurrentTime] = useState(() => {
-    const startDate = new Date(sessionStartDate);
-    return new Date(startDate.getTime() + (raceTime * 1000));
-  });
-  const lastUpdateRef = useRef(Date.now());
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
-    
-    if (!isPaused) {
-      timer = setInterval(() => {
-        const now = Date.now();
-        const realDelta = now - lastUpdateRef.current;
-        const simulatedDelta = realDelta * speed;
-        
-        setCurrentTime(prevTime => {
-          const newTime = new Date(prevTime.getTime() + simulatedDelta);
-          return newTime;
-        });
-        
-        lastUpdateRef.current = now;
-      }, 100);
-    }
-
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isPaused, speed]);
-
-  useEffect(() => {
-    const startDate = new Date(sessionStartDate);
-    setCurrentTime(new Date(startDate.getTime() + (raceTime * 1000)));
-  }, [raceTime, sessionStartDate]);
-
   const handleSpeedChange = (increment: boolean) => {
     const newSpeed = increment ? Math.min(speed + 1, 20) : Math.max(speed - 1, 1);
     onSpeedChange(newSpeed);
@@ -101,7 +67,7 @@ export const SimulationControls: React.FC<Props> = ({
           Race Time: {formatRaceTime(raceTime)}
         </div>
         <div className="text-gray-400 font-mono text-sm">
-          Local Time: {currentTime.toLocaleTimeString()}
+          Local Time: {localTime.toLocaleTimeString()}
         </div>
       </div>
     </div>
