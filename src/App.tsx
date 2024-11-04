@@ -17,6 +17,7 @@ export const App: React.FC = () => {
   const [simulationSpeed, setSimulationSpeed] = useState(1);
   const [isSimulationStarted, setIsSimulationStarted] = useState(false);
   const [currentRaceTime, setCurrentRaceTime] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
   const getLatestDriverTiming = (driverNumber: number) => {
     return timingData
@@ -104,6 +105,8 @@ export const App: React.FC = () => {
                         speed={simulationSpeed}
                         onSpeedChange={setSimulationSpeed}
                         raceTime={currentRaceTime}
+                        isPaused={isPaused}
+                        onPauseChange={setIsPaused}
                       />
                     )}
                     <GapDisplay
@@ -128,6 +131,7 @@ export const App: React.FC = () => {
                       isLoading={isLoading}
                       isSimulationStarted={isSimulationStarted}
                       onRaceTimeUpdate={setCurrentRaceTime}
+                      isPaused={isPaused}
                     />
                   </>
                 )}

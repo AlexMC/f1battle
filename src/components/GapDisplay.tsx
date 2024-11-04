@@ -74,7 +74,7 @@ export const GapDisplay: React.FC<Props> = ({
       fetchIntervalData();
     }
 
-    let pollInterval: number | null = null;
+    let pollInterval: NodeJS.Timeout | null = null;
     if (isLiveSession) {
       pollInterval = setInterval(fetchIntervalData, 5000);
     }

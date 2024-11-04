@@ -12,6 +12,7 @@ interface Props {
   simulationSpeed: number;
   isLoading: boolean;
   isSimulationStarted: boolean;
+  isPaused: boolean;
   onRaceTimeUpdate: (time: number) => void;
 }
 
@@ -62,6 +63,7 @@ export const LapComparison: React.FC<Props> = ({
   simulationSpeed,
   isLoading,
   isSimulationStarted,
+  isPaused,
   onRaceTimeUpdate 
 }) => {
   const { visibleTiming, isSimulationInitialized, raceTime } = useTimingSimulation(
@@ -70,7 +72,8 @@ export const LapComparison: React.FC<Props> = ({
     driver1.driver_number.toString(),
     driver2.driver_number.toString(),
     simulationSpeed,
-    isSimulationStarted
+    isSimulationStarted,
+    isPaused
   );
 
   useEffect(() => {

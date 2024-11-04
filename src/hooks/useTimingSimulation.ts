@@ -20,7 +20,8 @@ export const useTimingSimulation = (
   driver1Number: string,
   driver2Number: string,
   simulationSpeed: number = 1,
-  isSimulationStarted: boolean = false
+  isSimulationStarted: boolean = false,
+  isPaused: boolean = false
 ): TimingSimulationResult => {
   const [visibleTiming, setVisibleTiming] = useState<VisibleTiming>({});
   const [isSimulationInitialized, setIsSimulationInitialized] = useState(false);
@@ -93,7 +94,7 @@ export const useTimingSimulation = (
     }
 
     const simulationInterval = setInterval(() => {
-      if (!isSimulationStarted) return;
+      if (!isSimulationStarted || isPaused) return;
 
       const currentTime = Date.now();
       const deltaTime = (currentTime - lastUpdateTimeRef.current) / 1000;
@@ -162,7 +163,7 @@ export const useTimingSimulation = (
     }, 100);
 
     return () => clearInterval(simulationInterval);
-  }, [timingData, isLiveSession, driver1Number, driver2Number, simulationSpeed, isSimulationStarted]);
+  }, [timingData, isLiveSession, driver1Number, driver2Number, simulationSpeed, isSimulationStarted, isPaused]);
 
   return { visibleTiming, isSimulationInitialized, raceTime };
 }; 

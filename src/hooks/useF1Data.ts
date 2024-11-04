@@ -173,7 +173,7 @@ export const useF1Data = () => {
     fetchActiveSessions();
     
     // Only set up the interval if we found an active session
-    let interval: number | null = null;
+    let interval: NodeJS.Timeout | null = null;
     if (hasActiveSession) {
       interval = setInterval(fetchActiveSessions, 30000);
     }
@@ -317,7 +317,7 @@ export const useF1Data = () => {
       s.session_id === selectedSession.session_id && s.status === 'active'
     );
     
-    let timingInterval: number | null = null;
+    let timingInterval: NodeJS.Timeout | null = null;
     if (isActiveSession) {
       timingInterval = setInterval(fetchTimingData, 5000);
     }
