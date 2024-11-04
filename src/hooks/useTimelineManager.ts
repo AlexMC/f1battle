@@ -11,12 +11,13 @@ interface TimelineState {
 
 export const useTimelineManager = (
   session: Session | null,
-  isLiveSession: boolean
+  isLiveSession: boolean,
+  sessionStartTime: Date | null
 ) => {
   const [state, setState] = useState<TimelineState>(() => ({
     raceTime: 0,
     localTime: new Date(),
-    sessionStartTime: session ? new Date(session.date) : new Date(),
+    sessionStartTime: sessionStartTime || new Date(),
     isPaused: true,
     speed: 1
   }));
@@ -24,16 +25,16 @@ export const useTimelineManager = (
   const lastUpdateRef = useRef<number>(Date.now());
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || !sessionStartTime) return;
     
-    // Reset timeline when session changes
+    // Reset timeline when session or start time changes
     setState(prev => ({
       ...prev,
       raceTime: 0,
-      sessionStartTime: new Date(session.date),
+      sessionStartTime: sessionStartTime,
       isPaused: true
     }));
-  }, [session]);
+  }, [session, sessionStartTime]);
 
   useEffect(() => {
     if (state.isPaused || !session) return;

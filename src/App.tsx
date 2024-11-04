@@ -11,13 +11,23 @@ import { TeamRadioManager } from './components/TeamRadioManager';
 import { useTimelineManager } from './hooks/useTimelineManager';
 
 export const App: React.FC = () => {
-  const { sessions, selectedSession, setSelectedSession, drivers, timingData, setSelectedDrivers, isLoading } = useF1Data();
+  const { 
+    sessions, 
+    selectedSession, 
+    setSelectedSession, 
+    drivers, 
+    timingData, 
+    setSelectedDrivers, 
+    isLoading,
+    sessionStartTime 
+  } = useF1Data();
+
   const [selectedDriver1, setSelectedDriver1] = useState<Driver | null>(null);
   const [selectedDriver2, setSelectedDriver2] = useState<Driver | null>(null);
   const [isSelectionCollapsed, setIsSelectionCollapsed] = useState(false);
 
   const isLiveSession = selectedSession?.status === 'active';
-  const timeline = useTimelineManager(selectedSession, isLiveSession);
+  const timeline = useTimelineManager(selectedSession, isLiveSession, sessionStartTime);
 
   const handleSelectDriver1 = (driver: Driver) => {
     setSelectedDriver1(driver);
