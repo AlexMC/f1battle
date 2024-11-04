@@ -50,4 +50,13 @@ export interface IntervalData {
   interval: number;
   meeting_key: number;
   session_key: number;
+}
+
+export interface TeamRadio {
+  date: string;
+  driver_number: number;
+  meeting_key: number;
+  recording_url: string;
+  session_key: number;
+  race_time: number;
 } 
