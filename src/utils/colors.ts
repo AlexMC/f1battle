@@ -8,7 +8,7 @@ export const getTeamColor = (teamName: string): string => {
     'Alpine': 'text-[#2293D1]',
     'Williams': 'text-[#37BEDD]',
     'AlphaTauri': 'text-[#5E8FAA]',
-    'Alfa Romeo': 'text-[#C92D4B]',
+    'Kick Sauber': 'text-[#79FE0C]',
     'Haas F1 Team': 'text-[#B6BABD]'
   };
   
