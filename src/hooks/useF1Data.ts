@@ -79,6 +79,37 @@ const mapLapDataToTimingData = (t: any, sessionId: number) => ({
   timestamp: t.date_start ? new Date(t.date_start).getTime() : 0
 });
 
+const calculateRaceEndTime = (timingData: TimingData[]): number => {
+  if (!timingData.length) return 0;
+  
+  // Group timing data by driver
+  const driverLaps = timingData.reduce((acc, lap) => {
+    if (!acc[lap.driver_number]) {
+      acc[lap.driver_number] = [];
+    }
+    acc[lap.driver_number].push(lap);
+    return acc;
+  }, {} as Record<number, TimingData[]>);
+
+  // Calculate total race time for each driver
+  const driverTotalTimes = Object.values(driverLaps).map(laps => {
+    let totalTime = 0;
+    const sortedLaps = [...laps].sort((a, b) => a.lap_number - b.lap_number);
+    
+    for (const lap of sortedLaps) {
+      const sector1 = lap.sector_1_time || 0;
+      const sector2 = lap.sector_2_time || 0;
+      const sector3 = lap.sector_3_time || 0;
+      totalTime += sector1 + sector2 + sector3;
+    }
+    
+    return totalTime;
+  });
+
+  // Return the longest race time (slowest driver)
+  return Math.max(...driverTotalTimes);
+};
+
 export const useF1Data = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSession, _setSelectedSession] = useState<Session | null>(null);
@@ -355,6 +386,7 @@ export const useF1Data = () => {
     timingData,
     setSelectedDrivers,
     isLoading,
-    sessionStartTime
+    sessionStartTime,
+    raceEndTime: calculateRaceEndTime(timingData)
   };
 }; 

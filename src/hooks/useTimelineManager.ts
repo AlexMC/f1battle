@@ -9,11 +9,19 @@ interface TimelineState {
   speed: number;
 }
 
-export const useTimelineManager = (
-  session: Session | null,
-  isLiveSession: boolean,
-  sessionStartTime: Date | null
-) => {
+interface Props {
+  session: Session | null;
+  isLiveSession: boolean;
+  sessionStartTime: Date | null;
+  raceEndTime: number;
+}
+
+export const useTimelineManager = ({
+  session,
+  isLiveSession,
+  sessionStartTime,
+  raceEndTime
+}: Props) => {
   const [state, setState] = useState<TimelineState>(() => ({
     raceTime: 0,
     localTime: new Date(),
@@ -45,10 +53,15 @@ export const useTimelineManager = (
       const simulatedDelta = realTimeDelta * state.speed;
 
       setState(prev => {
-        const newRaceTime = prev.raceTime + simulatedDelta;
+        const newRaceTime = Math.min(prev.raceTime + simulatedDelta, raceEndTime);
         const newLocalTime = new Date(
           prev.sessionStartTime.getTime() + (newRaceTime * 1000)
         );
+
+        // Auto-pause when reaching the end
+        if (newRaceTime >= raceEndTime && !prev.isPaused) {
+          setPaused(true);
+        }
 
         return {
           ...prev,
@@ -61,7 +74,7 @@ export const useTimelineManager = (
     }, 100);
 
     return () => clearInterval(intervalId);
-  }, [state.isPaused, state.speed, session]);
+  }, [state.isPaused, state.speed, session, raceEndTime]);
 
   const setSpeed = (newSpeed: number) => {
     setState(prev => ({ ...prev, speed: newSpeed }));

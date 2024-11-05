@@ -19,7 +19,8 @@ export const App: React.FC = () => {
     timingData, 
     setSelectedDrivers, 
     isLoading,
-    sessionStartTime 
+    sessionStartTime,
+    raceEndTime 
   } = useF1Data();
 
   const [selectedDriver1, setSelectedDriver1] = useState<Driver | null>(null);
@@ -27,7 +28,12 @@ export const App: React.FC = () => {
   const [isSelectionCollapsed, setIsSelectionCollapsed] = useState(false);
 
   const isLiveSession = selectedSession?.status === 'active';
-  const timeline = useTimelineManager(selectedSession, isLiveSession, sessionStartTime);
+  const timeline = useTimelineManager({
+    session: selectedSession,
+    isLiveSession,
+    sessionStartTime,
+    raceEndTime
+  });
 
   const handleSelectDriver1 = (driver: Driver) => {
     setSelectedDriver1(driver);
