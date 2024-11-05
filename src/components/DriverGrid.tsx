@@ -8,6 +8,7 @@ interface Props {
   sessionId: number;
   drivers: Driver[];
   isLoading: boolean;
+  raceTime: number;
 }
 
 interface GridPosition {
@@ -17,7 +18,7 @@ interface GridPosition {
 
 const CACHE_KEY = (sessionId: number) => `f1_grid_${sessionId}`;
 
-export const DriverGrid: React.FC<Props> = ({ sessionId, drivers, isLoading }) => {
+export const DriverGrid: React.FC<Props> = ({ sessionId, drivers, isLoading, raceTime }) => {
   const [gridPositions, setGridPositions] = useState<GridPosition[]>([]);
   const [isLoadingGrid, setIsLoadingGrid] = useState(true);
 

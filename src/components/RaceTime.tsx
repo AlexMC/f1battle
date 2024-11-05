@@ -1,7 +1,9 @@
 import React from 'react';
 import { SessionSelector } from './SessionSelector';
 import { DriverGrid } from './DriverGrid';
+import { SimulationControls } from './SimulationControls';
 import { useF1Data } from '../hooks/useF1Data';
+import { useTimelineManager } from '../hooks/useTimelineManager';
 
 export const RaceTime: React.FC = () => {
   const { 
@@ -9,8 +11,18 @@ export const RaceTime: React.FC = () => {
     selectedSession, 
     setSelectedSession,
     drivers,
-    isLoading
+    isLoading,
+    sessionStartTime,
+    raceEndTime
   } = useF1Data();
+
+  const isLiveSession = selectedSession?.status === 'active';
+  const timeline = useTimelineManager({
+    session: selectedSession,
+    isLiveSession,
+    sessionStartTime,
+    raceEndTime
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white py-8">
@@ -26,11 +38,25 @@ export const RaceTime: React.FC = () => {
         />
 
         {selectedSession && (
-          <DriverGrid 
-            sessionId={selectedSession.session_id}
-            drivers={drivers}
-            isLoading={isLoading}
-          />
+          <>
+            <div className="mt-8 mb-8">
+              <SimulationControls 
+                speed={timeline.speed}
+                onSpeedChange={timeline.setSpeed}
+                raceTime={timeline.raceTime}
+                isPaused={timeline.isPaused}
+                onPauseChange={timeline.setPaused}
+                localTime={timeline.localTime}
+              />
+            </div>
+
+            <DriverGrid 
+              sessionId={selectedSession.session_id}
+              drivers={drivers}
+              isLoading={isLoading}
+              raceTime={timeline.raceTime}
+            />
+          </>
         )}
       </div>
     </div>
