@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Driver, TimingData, Session } from '../types';
 import { cacheUtils } from '../utils/cache';
 import { calculateSessionStartTime } from '../utils/raceTimings';
@@ -378,6 +378,10 @@ export const useF1Data = () => {
     }
   };
 
+  const raceEndTime = useMemo(() => {
+    return calculateRaceEndTime(timingData);
+  }, [timingData]);
+
   return { 
     sessions, 
     selectedSession, 
@@ -387,6 +391,6 @@ export const useF1Data = () => {
     setSelectedDrivers,
     isLoading,
     sessionStartTime,
-    raceEndTime: calculateRaceEndTime(timingData)
+    raceEndTime
   };
 }; 
