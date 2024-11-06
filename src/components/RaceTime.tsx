@@ -72,6 +72,7 @@ export const RaceTime: React.FC = () => {
               drivers={drivers}
               isLoading={isLoading}
               raceTime={timeline.raceTime}
+              sessionStartTime={timeline.sessionStartTime}
             />
           </>
         )}

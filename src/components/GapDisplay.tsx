@@ -5,6 +5,8 @@ import { LoadingSpinner } from './LoadingSpinner';
 import { cacheUtils } from '../utils/cache';
 import { apiQueue } from '../utils/apiQueue';
 import { ApiIntervalResponse, ApiPositionResponse } from '../types/api';
+import { findPositionAtTime } from '../utils/positions';
+import { findDataAtTime } from '../utils/timing';
 
 interface Props {
   sessionId: number;
@@ -37,37 +39,6 @@ export const GapDisplay: React.FC<Props> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [currentGap, setCurrentGap] = useState<ReturnType<typeof getCurrentGap>>(null);
 
-  const findDataAtTime = <T extends IntervalData | PositionData>(
-    data: T[],
-    raceTime: number,
-    sessionStartTime: Date
-  ): T | null => {
-    if (!data.length) return null;
-    
-    const sortedData = [...data].sort((a, b) => {
-      const timeA = new Date(a.date.replace('+00:00', 'Z')).getTime() - sessionStartTime.getTime();
-      const timeB = new Date(b.date.replace('+00:00', 'Z')).getTime() - sessionStartTime.getTime();
-      return timeA - timeB;
-    });
-
-    let closestData = sortedData[0];
-    let minTimeDiff = Math.abs(
-      (new Date(closestData.date.replace('+00:00', 'Z')).getTime() - sessionStartTime.getTime()) / 1000 - raceTime
-    );
-
-    for (const item of sortedData) {
-      const itemTime = (new Date(item.date.replace('+00:00', 'Z')).getTime() - sessionStartTime.getTime()) / 1000;
-      const timeDiff = Math.abs(itemTime - raceTime);
-      
-      if (timeDiff < minTimeDiff) {
-        minTimeDiff = timeDiff;
-        closestData = item;
-      }
-    }
-    
-    return closestData;
-  };
-
   const getCurrentGap = useCallback(() => {
     const driver1Intervals = intervalData[driver1.driver_number] || [];
     const driver2Intervals = intervalData[driver2.driver_number] || [];
@@ -76,10 +47,11 @@ export const GapDisplay: React.FC<Props> = ({
 
     if (!driver1Intervals.length || !driver2Intervals.length) return null;
 
+    const driver1Position = findPositionAtTime(driver1Positions, raceTime, sessionStartTime);
+    const driver2Position = findPositionAtTime(driver2Positions, raceTime, sessionStartTime);
+
     const driver1Interval = findDataAtTime(driver1Intervals, raceTime, sessionStartTime);
     const driver2Interval = findDataAtTime(driver2Intervals, raceTime, sessionStartTime);
-    const driver1Position = findDataAtTime(driver1Positions, raceTime, sessionStartTime);
-    const driver2Position = findDataAtTime(driver2Positions, raceTime, sessionStartTime);
 
     if (!driver1Interval || !driver2Interval) return null;
 
@@ -92,8 +64,8 @@ export const GapDisplay: React.FC<Props> = ({
       ahead: driver1Interval.gap_to_leader < driver2Interval.gap_to_leader ? driver1 : driver2,
       behind: driver1Interval.gap_to_leader < driver2Interval.gap_to_leader ? driver2 : driver1,
       positions: {
-        [driver1.driver_number]: driver1Position?.position,
-        [driver2.driver_number]: driver2Position?.position
+        [driver1.driver_number]: driver1Position,
+        [driver2.driver_number]: driver2Position
       }
     };
   }, [intervalData, positionData, driver1, driver2, raceTime, sessionStartTime]);

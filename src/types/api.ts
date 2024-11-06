@@ -6,10 +6,15 @@ export interface ApiDriverResponse {
 
 export interface ApiPositionResponse {
   date: string;
+  driver_number: number;
+  meeting_key?: number;
   position: number;
 }
 
 export interface ApiIntervalResponse {
   date: string;
+  driver_number: number;
+  meeting_key?: number;
   gap_to_leader: number;
+  interval: number;
 } 

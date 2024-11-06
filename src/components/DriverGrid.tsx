@@ -5,12 +5,15 @@ import { LoadingSpinner } from './LoadingSpinner';
 import { cacheUtils } from '../utils/cache';
 import { apiQueue } from '../utils/apiQueue';
 import { ApiPositionResponse } from '../types/api';
+import { findPositionAtTime } from '../utils/positions';
+import { mapApiPositionToPositionData } from '../utils/apiMappers';
 
 interface Props {
   sessionId: number;
   drivers: Driver[];
   isLoading: boolean;
   raceTime: number;
+  sessionStartTime: Date;
 }
 
 interface GridPosition {
@@ -18,60 +21,76 @@ interface GridPosition {
   driver: Driver;
 }
 
-const CACHE_KEY = (sessionId: number) => `f1_grid_${sessionId}`;
+const CACHE_KEY = {
+  grid: (sessionId: number) => `f1_grid_${sessionId}`,
+  positions: (sessionId: number, driverNumber: number) => 
+    `f1_positions_${sessionId}_${driverNumber}`
+};
 
-export const DriverGrid: React.FC<Props> = ({ sessionId, drivers, isLoading, raceTime }) => {
+export const DriverGrid: React.FC<Props> = ({ 
+  sessionId, 
+  drivers, 
+  isLoading, 
+  raceTime,
+  sessionStartTime
+}) => {
+  const [positionData, setPositionData] = useState<{[key: number]: PositionData[]}>({});
   const [gridPositions, setGridPositions] = useState<GridPosition[]>([]);
   const [isLoadingGrid, setIsLoadingGrid] = useState(true);
 
+  // Fetch position data for all drivers
   useEffect(() => {
-    const fetchStartingGrid = async () => {
+    const fetchPositionData = async () => {
       if (!sessionId || drivers.length === 0) return;
 
-      // Try to get from cache first
-      const cachedGrid = cacheUtils.get<GridPosition[]>(CACHE_KEY(sessionId));
-      if (cachedGrid) {
-        setGridPositions(cachedGrid);
-        setIsLoadingGrid(false);
-        return;
-      }
-
       try {
-        // Fetch initial positions for all drivers
-        const positionPromises = drivers.map(async driver => {
+        const positionsPromises = drivers.map(async driver => {
+          const cacheKey = CACHE_KEY.positions(sessionId, driver.driver_number);
+          const cachedData = cacheUtils.get<PositionData[]>(cacheKey);
+          
+          if (cachedData) return { driver: driver, data: cachedData };
+
           const data = await apiQueue.enqueue<ApiPositionResponse[]>(
             `/api/position?session_key=${sessionId}&driver_number=${driver.driver_number}`
           );
-          const sortedData = data.sort((a, b) => 
-            new Date(a.date).getTime() - new Date(b.date).getTime()
-          );
-          return {
-            driver,
-            position: sortedData[0]?.position || 0
-          };
+          const mappedData = data.map(pos => mapApiPositionToPositionData(pos, sessionId));
+          cacheUtils.set(cacheKey, mappedData, 24 * 60 * 60 * 1000);
+          return { driver: driver, data: mappedData };
         });
 
-        const positions = await Promise.all(positionPromises);
-        const sortedGrid = positions
-          .filter(pos => pos.position > 0)
-          .sort((a, b) => a.position - b.position)
-          .map(pos => ({
-            position: pos.position,
-            driver: pos.driver
-          }));
+        const results = await Promise.all(positionsPromises);
+        const newPositionData = results.reduce((acc, { driver, data }) => {
+          acc[driver.driver_number] = data;
+          return acc;
+        }, {} as {[key: number]: PositionData[]});
 
-        // Cache the results
-        cacheUtils.set(CACHE_KEY(sessionId), sortedGrid, 24 * 60 * 60 * 1000);
-        setGridPositions(sortedGrid);
+        setPositionData(newPositionData);
+        setIsLoadingGrid(false);
       } catch (error) {
-        console.error('Error fetching starting grid:', error);
-      } finally {
+        console.error('Error fetching position data:', error);
         setIsLoadingGrid(false);
       }
     };
 
-    fetchStartingGrid();
+    fetchPositionData();
   }, [sessionId, drivers]);
+
+  // Update grid positions based on race time
+  useEffect(() => {
+    if (!Object.keys(positionData).length) return;
+
+    const currentPositions = drivers.map(driver => {
+      const driverPositions = positionData[driver.driver_number] || [];
+      const position = findPositionAtTime(driverPositions, raceTime, sessionStartTime) || 0;
+      return { position, driver };
+    });
+
+    const sortedGrid = currentPositions
+      .filter(pos => pos.position > 0)
+      .sort((a, b) => a.position - b.position);
+
+    setGridPositions(sortedGrid);
+  }, [positionData, drivers, raceTime, sessionStartTime]);
 
   if (isLoading || isLoadingGrid) {
     return <LoadingSpinner />;
