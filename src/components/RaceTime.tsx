@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SessionSelector } from './SessionSelector';
 import { DriverGrid } from './DriverGrid';
 import { SimulationControls } from './SimulationControls';
@@ -6,6 +6,7 @@ import { useF1Data } from '../hooks/useF1Data';
 import { useTimelineManager } from '../hooks/useTimelineManager';
 
 export const RaceTime: React.FC = () => {
+  const [isSimulationStarted, setIsSimulationStarted] = useState(false);
   const { 
     sessions, 
     selectedSession, 
@@ -24,6 +25,11 @@ export const RaceTime: React.FC = () => {
     raceEndTime
   });
 
+  const handleStartSimulation = () => {
+    setIsSimulationStarted(true);
+    timeline.setPaused(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white py-8">
       <div className="container mx-auto px-4 max-w-6xl">
@@ -37,7 +43,18 @@ export const RaceTime: React.FC = () => {
           onSelectSession={setSelectedSession}
         />
 
-        {selectedSession && (
+        {selectedSession && !isSimulationStarted && (
+          <div className="flex justify-end mb-8">
+            <button
+              onClick={handleStartSimulation}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+            >
+              Start Simulation
+            </button>
+          </div>
+        )}
+
+        {selectedSession && isSimulationStarted && (
           <>
             <div className="mt-8 mb-8">
               <SimulationControls 
