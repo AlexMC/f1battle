@@ -9,6 +9,7 @@ import { SimulationControls } from './SimulationControls';
 import { GapDisplay } from './GapDisplay';
 import { TeamRadioManager } from './TeamRadioManager';
 import { useTimelineManager } from '../hooks/useTimelineManager';
+import { useTeamRadios } from '../hooks/useTeamRadios';
 
 export const LiveBattle: React.FC = () => {
   const { 
@@ -34,6 +35,13 @@ export const LiveBattle: React.FC = () => {
     sessionStartTime,
     raceEndTime
   });
+
+  const { radioMessages, isLoading: isLoadingRadios } = useTeamRadios(
+    selectedSession?.session_id || 0,
+    [selectedDriver1, selectedDriver2].filter(Boolean) as Driver[],
+    timeline.raceTime,
+    timeline.sessionStartTime
+  );
 
   const handleSelectDriver1 = (driver: Driver) => {
     setSelectedDriver1(driver);
@@ -124,13 +132,14 @@ export const LiveBattle: React.FC = () => {
                       raceTime={timeline.raceTime}
                       localTime={timeline.localTime}
                       sessionStartTime={timeline.sessionStartTime}
+                      radioMessages={radioMessages}
                     />
                     <LapComparison 
                       timingData={timingData}
                       driver1={selectedDriver1}
                       driver2={selectedDriver2}
                       isLiveSession={isLiveSession}
-                      isLoading={isLoading}
+                      isLoading={isLoading || isLoadingRadios}
                       raceTime={timeline.raceTime}
                     />
                   </>

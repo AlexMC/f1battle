@@ -20,6 +20,7 @@ interface Props {
   sessionStartTime: Date;
   onSelectDriver: (driver: Driver, position: number, availableRadioMessages: number) => void;
   selectedDriver: Driver | null;
+  radioMessages: {[key: number]: TeamRadio[]};
 }
 
 interface GridPosition {
@@ -47,15 +48,10 @@ export const DriverGrid: React.FC<Props> = ({
   raceTime,
   sessionStartTime,
   onSelectDriver,
-  selectedDriver
+  selectedDriver,
+  radioMessages
 }) => {
   const [positions, setPositions] = useState<{[key: number]: number}>({});
-  const { radioMessages, isLoading: isLoadingRadios } = useTeamRadios(
-    sessionId,
-    drivers,
-    raceTime,
-    sessionStartTime
-  );
 
   const handlePositionUpdate = (driverNumber: number, position: number) => {
     setPositions(prev => ({
@@ -72,7 +68,7 @@ export const DriverGrid: React.FC<Props> = ({
     return posA - posB;
   });
 
-  if (parentIsLoading || isLoadingRadios) {
+  if (parentIsLoading) {
     return <LoadingSpinner />;
   }
 

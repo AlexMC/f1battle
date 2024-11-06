@@ -6,6 +6,7 @@ import { useF1Data } from '../hooks/useF1Data';
 import { useTimelineManager } from '../hooks/useTimelineManager';
 import { DriverDetail } from './DriverDetail';
 import { Driver } from '../types';
+import { useTeamRadios } from '../hooks/useTeamRadios';
 
 interface SelectedDriverData {
   driver: Driver;
@@ -33,6 +34,13 @@ export const RaceTime: React.FC = () => {
     sessionStartTime,
     raceEndTime
   });
+
+  const { radioMessages, isLoading: isLoadingRadios } = useTeamRadios(
+    selectedSession?.session_id || 0,
+    drivers,  // Pass all drivers to get all radio messages at once
+    timeline.raceTime,
+    timeline.sessionStartTime
+  );
 
   const handleStartSimulation = () => {
     setIsSimulationStarted(true);
@@ -101,11 +109,12 @@ export const RaceTime: React.FC = () => {
               <DriverGrid 
                 sessionId={selectedSession.session_id}
                 drivers={drivers}
-                isLoading={isLoading}
+                isLoading={isLoading || isLoadingRadios}
                 raceTime={timeline.raceTime}
                 sessionStartTime={timeline.sessionStartTime}
                 onSelectDriver={handleSelectDriver}
                 selectedDriver={null}
+                radioMessages={radioMessages}  // Pass down radio messages
               />
             )}
           </>
