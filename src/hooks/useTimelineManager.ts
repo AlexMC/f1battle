@@ -24,11 +24,26 @@ export const useTimelineManager = ({
 }: Props) => {
   const [state, setState] = useState<TimelineState>(() => ({
     raceTime: 0,
-    localTime: new Date(),
-    sessionStartTime: sessionStartTime || new Date(),
+    localTime: new Date(0),
+    sessionStartTime: new Date(0),
     isPaused: true,
     speed: 1
   }));
+
+  // Single effect to handle all timeline state updates
+  useEffect(() => {
+    if (!sessionStartTime) return;
+
+    const newLocalTime = new Date(sessionStartTime.getTime() + (state.raceTime * 1000));
+    
+    setState(prev => ({
+      ...prev,
+      sessionStartTime,
+      localTime: newLocalTime,
+      raceTime: prev.raceTime,
+      isPaused: true // Always pause when session changes
+    }));
+  }, [sessionStartTime]);
 
   const lastUpdateRef = useRef<number>(Date.now());
 
