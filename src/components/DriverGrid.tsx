@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Driver, PositionData } from '../types';
+import { Driver, PositionData, TeamRadio } from '../types';
 import { getTeamColor } from '../utils/colors';
 import { LoadingSpinner } from './LoadingSpinner';
 import { cacheUtils } from '../utils/cache';
@@ -7,6 +7,7 @@ import { apiQueue } from '../utils/apiQueue';
 import { ApiPositionResponse } from '../types/api';
 import { findPositionAtTime } from '../utils/positions';
 import { mapApiPositionToPositionData } from '../utils/apiMappers';
+import { RadioMessageIndicator } from './RadioMessageIndicator';
 
 interface Props {
   sessionId: number;
@@ -19,6 +20,7 @@ interface Props {
 interface GridPosition {
   position: number;
   driver: Driver;
+  availableRadioMessages: number;
 }
 
 const CACHE_KEY = {
@@ -26,6 +28,9 @@ const CACHE_KEY = {
   positions: (sessionId: number, driverNumber: number) => 
     `f1_positions_${sessionId}_${driverNumber}`
 };
+
+const RADIO_CACHE_KEY = (sessionId: number, driverNumber: number) =>
+  `f1_radio_${sessionId}_${driverNumber}`;
 
 export const DriverGrid: React.FC<Props> = ({ 
   sessionId, 
@@ -35,6 +40,7 @@ export const DriverGrid: React.FC<Props> = ({
   sessionStartTime
 }) => {
   const [positionData, setPositionData] = useState<{[key: number]: PositionData[]}>({});
+  const [radioMessages, setRadioMessages] = useState<{[key: number]: TeamRadio[]}>({});
   const [gridPositions, setGridPositions] = useState<GridPosition[]>([]);
   const [isLoadingGrid, setIsLoadingGrid] = useState(true);
 
@@ -75,6 +81,40 @@ export const DriverGrid: React.FC<Props> = ({
     fetchPositionData();
   }, [sessionId, drivers]);
 
+  // Fetch radio messages for all drivers
+  useEffect(() => {
+    const fetchRadioMessages = async () => {
+      if (!sessionId || drivers.length === 0) return;
+
+      try {
+        const radioPromises = drivers.map(async driver => {
+          const cacheKey = RADIO_CACHE_KEY(sessionId, driver.driver_number);
+          const cachedData = cacheUtils.get<TeamRadio[]>(cacheKey);
+          
+          if (cachedData) return { driver: driver, data: cachedData };
+
+          const data = await apiQueue.enqueue<TeamRadio[]>(
+            `/api/team_radio?session_key=${sessionId}&driver_number=${driver.driver_number}`
+          );
+          cacheUtils.set(cacheKey, data, 24 * 60 * 60 * 1000);
+          return { driver: driver, data };
+        });
+
+        const results = await Promise.all(radioPromises);
+        const newRadioMessages = results.reduce((acc, { driver, data }) => {
+          acc[driver.driver_number] = data;
+          return acc;
+        }, {} as {[key: number]: TeamRadio[]});
+
+        setRadioMessages(newRadioMessages);
+      } catch (error) {
+        console.error('Error fetching radio messages:', error);
+      }
+    };
+
+    fetchRadioMessages();
+  }, [sessionId, drivers]);
+
   // Update grid positions based on race time
   useEffect(() => {
     if (!Object.keys(positionData).length) return;
@@ -82,7 +122,19 @@ export const DriverGrid: React.FC<Props> = ({
     const currentPositions = drivers.map(driver => {
       const driverPositions = positionData[driver.driver_number] || [];
       const position = findPositionAtTime(driverPositions, raceTime, sessionStartTime) || 0;
-      return { position, driver };
+      
+      // Calculate available radio messages
+      const driverRadios = radioMessages[driver.driver_number] || [];
+      const availableMessages = driverRadios.filter(radio => {
+        const messageTime = (new Date(radio.date).getTime() - sessionStartTime.getTime()) / 1000;
+        return messageTime <= raceTime;
+      }).length;
+
+      return { 
+        position, 
+        driver,
+        availableRadioMessages: availableMessages
+      };
     });
 
     const sortedGrid = currentPositions
@@ -90,7 +142,7 @@ export const DriverGrid: React.FC<Props> = ({
       .sort((a, b) => a.position - b.position);
 
     setGridPositions(sortedGrid);
-  }, [positionData, drivers, raceTime, sessionStartTime]);
+  }, [positionData, drivers, raceTime, sessionStartTime, radioMessages]);
 
   if (isLoading || isLoadingGrid) {
     return <LoadingSpinner />;
@@ -98,7 +150,7 @@ export const DriverGrid: React.FC<Props> = ({
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {gridPositions.map(({ position, driver }) => (
+      {gridPositions.map(({ position, driver, availableRadioMessages }) => (
         <div 
           key={driver.driver_number}
           className="bg-gray-800 rounded-lg p-4 shadow-xl flex items-center gap-4"
@@ -107,8 +159,11 @@ export const DriverGrid: React.FC<Props> = ({
             P{position}
           </div>
           <div className="flex-1">
-            <div className={`${getTeamColor(driver.team_name)} text-lg font-semibold`}>
-              {driver.full_name}
+            <div className="flex items-center justify-between">
+              <span className={`${getTeamColor(driver.team_name)} text-lg font-semibold`}>
+                {driver.full_name}
+              </span>
+              <RadioMessageIndicator messageCount={availableRadioMessages} />
             </div>
             <div className="text-sm text-gray-400">
               {driver.team_name} | #{driver.driver_number}
