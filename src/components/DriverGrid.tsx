@@ -9,6 +9,8 @@ import { findPositionAtTime } from '../utils/positions';
 import { mapApiPositionToPositionData } from '../utils/apiMappers';
 import { RadioMessageIndicator } from './RadioMessageIndicator';
 import { useTeamRadios } from '../hooks/useTeamRadios';
+import { useDriverPosition } from '../hooks/useDriverPosition';
+import { DriverGridItem } from './DriverGridItem';
 
 interface Props {
   sessionId: number;
@@ -47,11 +49,7 @@ export const DriverGrid: React.FC<Props> = ({
   onSelectDriver,
   selectedDriver
 }) => {
-  const [positionData, setPositionData] = useState<{[key: number]: PositionData[]}>({});
-  const [gridPositions, setGridPositions] = useState<GridPosition[]>([]);
-  const [isLoadingGrid, setIsLoadingGrid] = useState(true);
-  const [selectedDriverData, setSelectedDriverData] = useState<SelectedDriverData | null>(null);
-
+  const [positions, setPositions] = useState<{[key: number]: number}>({});
   const { radioMessages, isLoading: isLoadingRadios } = useTeamRadios(
     sessionId,
     drivers,
@@ -59,101 +57,39 @@ export const DriverGrid: React.FC<Props> = ({
     sessionStartTime
   );
 
-  // Fetch position data for all drivers
-  useEffect(() => {
-    const fetchPositionData = async () => {
-      if (!sessionId || drivers.length === 0) return;
+  const handlePositionUpdate = (driverNumber: number, position: number) => {
+    setPositions(prev => ({
+      ...prev,
+      [driverNumber]: position
+    }));
+  };
 
-      try {
-        const positionsPromises = drivers.map(async driver => {
-          const cacheKey = CACHE_KEY.positions(sessionId, driver.driver_number);
-          const cachedData = cacheUtils.get<PositionData[]>(cacheKey);
-          
-          if (cachedData) return { driver: driver, data: cachedData };
+  const sortedDrivers = [...drivers].sort((a, b) => {
+    const posA = positions[a.driver_number] || 0;
+    const posB = positions[b.driver_number] || 0;
+    if (posA === 0) return 1;
+    if (posB === 0) return -1;
+    return posA - posB;
+  });
 
-          const data = await apiQueue.enqueue<ApiPositionResponse[]>(
-            `/api/position?session_key=${sessionId}&driver_number=${driver.driver_number}`
-          );
-          const mappedData = data.map(pos => mapApiPositionToPositionData(pos, sessionId));
-          cacheUtils.set(cacheKey, mappedData, 24 * 60 * 60 * 1000);
-          return { driver: driver, data: mappedData };
-        });
-
-        const results = await Promise.all(positionsPromises);
-        const newPositionData = results.reduce((acc, { driver, data }) => {
-          acc[driver.driver_number] = data;
-          return acc;
-        }, {} as {[key: number]: PositionData[]});
-
-        setPositionData(newPositionData);
-        setIsLoadingGrid(false);
-      } catch (error) {
-        console.error('Error fetching position data:', error);
-        setIsLoadingGrid(false);
-      }
-    };
-
-    fetchPositionData();
-  }, [sessionId, drivers]);
-
-  // Update grid positions based on race time
-  useEffect(() => {
-    if (!Object.keys(positionData).length) return;
-
-    const currentPositions = drivers.map(driver => {
-      const driverPositions = positionData[driver.driver_number] || [];
-      const position = findPositionAtTime(driverPositions, raceTime, sessionStartTime) || 0;
-      
-      // Calculate available radio messages
-      const driverRadios = radioMessages[driver.driver_number] || [];
-      const availableMessages = driverRadios.filter(radio => {
-        const messageTime = (new Date(radio.date).getTime() - sessionStartTime.getTime()) / 1000;
-        return messageTime <= raceTime;
-      }).length;
-
-      return { 
-        position, 
-        driver,
-        availableRadioMessages: availableMessages
-      };
-    });
-
-    const sortedGrid = currentPositions
-      .filter(pos => pos.position > 0)
-      .sort((a, b) => a.position - b.position);
-
-    setGridPositions(sortedGrid);
-  }, [positionData, drivers, raceTime, sessionStartTime, radioMessages]);
-
-  if (parentIsLoading || isLoadingGrid || isLoadingRadios) {
+  if (parentIsLoading || isLoadingRadios) {
     return <LoadingSpinner />;
   }
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {gridPositions.map(({ position, driver, availableRadioMessages }) => (
-        <div 
+      {sortedDrivers.map(driver => (
+        <DriverGridItem
           key={driver.driver_number}
-          className={`bg-gray-800 rounded-lg p-4 shadow-xl flex items-center gap-4 cursor-pointer hover:bg-gray-750 transition-colors ${
-            selectedDriver?.driver_number === driver.driver_number ? 'ring-2 ring-red-500' : ''
-          }`}
-          onClick={() => onSelectDriver?.(driver, position, availableRadioMessages)}
-        >
-          <div className="text-2xl font-bold text-gray-500 w-10">
-            P{position}
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <span className={`${getTeamColor(driver.team_name)} text-lg font-semibold`}>
-                {driver.full_name}
-              </span>
-              <RadioMessageIndicator messageCount={availableRadioMessages} />
-            </div>
-            <div className="text-sm text-gray-400">
-              {driver.team_name} | #{driver.driver_number}
-            </div>
-          </div>
-        </div>
+          sessionId={sessionId}
+          driver={driver}
+          raceTime={raceTime}
+          sessionStartTime={sessionStartTime}
+          radioMessages={radioMessages}
+          onSelectDriver={onSelectDriver}
+          isSelected={selectedDriver?.driver_number === driver.driver_number}
+          onPositionUpdate={handlePositionUpdate}
+        />
       ))}
     </div>
   );
