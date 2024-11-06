@@ -16,11 +16,19 @@ interface Props {
   isLoading: boolean;
   raceTime: number;
   sessionStartTime: Date;
+  onSelectDriver: (driver: Driver, position: number, availableRadioMessages: number) => void;
+  selectedDriver: Driver | null;
 }
 
 interface GridPosition {
   position: number;
   driver: Driver;
+  availableRadioMessages: number;
+}
+
+interface SelectedDriverData {
+  driver: Driver;
+  position: number;
   availableRadioMessages: number;
 }
 
@@ -35,11 +43,14 @@ export const DriverGrid: React.FC<Props> = ({
   drivers, 
   isLoading: parentIsLoading, 
   raceTime,
-  sessionStartTime
+  sessionStartTime,
+  onSelectDriver,
+  selectedDriver
 }) => {
   const [positionData, setPositionData] = useState<{[key: number]: PositionData[]}>({});
   const [gridPositions, setGridPositions] = useState<GridPosition[]>([]);
   const [isLoadingGrid, setIsLoadingGrid] = useState(true);
+  const [selectedDriverData, setSelectedDriverData] = useState<SelectedDriverData | null>(null);
 
   const { radioMessages, isLoading: isLoadingRadios } = useTeamRadios(
     sessionId,
@@ -123,7 +134,10 @@ export const DriverGrid: React.FC<Props> = ({
       {gridPositions.map(({ position, driver, availableRadioMessages }) => (
         <div 
           key={driver.driver_number}
-          className="bg-gray-800 rounded-lg p-4 shadow-xl flex items-center gap-4"
+          className={`bg-gray-800 rounded-lg p-4 shadow-xl flex items-center gap-4 cursor-pointer hover:bg-gray-750 transition-colors ${
+            selectedDriver?.driver_number === driver.driver_number ? 'ring-2 ring-red-500' : ''
+          }`}
+          onClick={() => onSelectDriver?.(driver, position, availableRadioMessages)}
         >
           <div className="text-2xl font-bold text-gray-500 w-10">
             P{position}
