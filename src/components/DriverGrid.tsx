@@ -8,6 +8,7 @@ import { ApiPositionResponse } from '../types/api';
 import { findPositionAtTime } from '../utils/positions';
 import { mapApiPositionToPositionData } from '../utils/apiMappers';
 import { RadioMessageIndicator } from './RadioMessageIndicator';
+import { useTeamRadios } from '../hooks/useTeamRadios';
 
 interface Props {
   sessionId: number;
@@ -29,20 +30,23 @@ const CACHE_KEY = {
     `f1_positions_${sessionId}_${driverNumber}`
 };
 
-const RADIO_CACHE_KEY = (sessionId: number, driverNumber: number) =>
-  `f1_radio_${sessionId}_${driverNumber}`;
-
 export const DriverGrid: React.FC<Props> = ({ 
   sessionId, 
   drivers, 
-  isLoading, 
+  isLoading: parentIsLoading, 
   raceTime,
   sessionStartTime
 }) => {
   const [positionData, setPositionData] = useState<{[key: number]: PositionData[]}>({});
-  const [radioMessages, setRadioMessages] = useState<{[key: number]: TeamRadio[]}>({});
   const [gridPositions, setGridPositions] = useState<GridPosition[]>([]);
   const [isLoadingGrid, setIsLoadingGrid] = useState(true);
+
+  const { radioMessages, isLoading: isLoadingRadios } = useTeamRadios(
+    sessionId,
+    drivers,
+    raceTime,
+    sessionStartTime
+  );
 
   // Fetch position data for all drivers
   useEffect(() => {
@@ -81,40 +85,6 @@ export const DriverGrid: React.FC<Props> = ({
     fetchPositionData();
   }, [sessionId, drivers]);
 
-  // Fetch radio messages for all drivers
-  useEffect(() => {
-    const fetchRadioMessages = async () => {
-      if (!sessionId || drivers.length === 0) return;
-
-      try {
-        const radioPromises = drivers.map(async driver => {
-          const cacheKey = RADIO_CACHE_KEY(sessionId, driver.driver_number);
-          const cachedData = cacheUtils.get<TeamRadio[]>(cacheKey);
-          
-          if (cachedData) return { driver: driver, data: cachedData };
-
-          const data = await apiQueue.enqueue<TeamRadio[]>(
-            `/api/team_radio?session_key=${sessionId}&driver_number=${driver.driver_number}`
-          );
-          cacheUtils.set(cacheKey, data, 24 * 60 * 60 * 1000);
-          return { driver: driver, data };
-        });
-
-        const results = await Promise.all(radioPromises);
-        const newRadioMessages = results.reduce((acc, { driver, data }) => {
-          acc[driver.driver_number] = data;
-          return acc;
-        }, {} as {[key: number]: TeamRadio[]});
-
-        setRadioMessages(newRadioMessages);
-      } catch (error) {
-        console.error('Error fetching radio messages:', error);
-      }
-    };
-
-    fetchRadioMessages();
-  }, [sessionId, drivers]);
-
   // Update grid positions based on race time
   useEffect(() => {
     if (!Object.keys(positionData).length) return;
@@ -144,7 +114,7 @@ export const DriverGrid: React.FC<Props> = ({
     setGridPositions(sortedGrid);
   }, [positionData, drivers, raceTime, sessionStartTime, radioMessages]);
 
-  if (isLoading || isLoadingGrid) {
+  if (parentIsLoading || isLoadingGrid || isLoadingRadios) {
     return <LoadingSpinner />;
   }
 
