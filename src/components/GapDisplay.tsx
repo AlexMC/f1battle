@@ -3,6 +3,8 @@ import { Driver, IntervalData, PositionData } from '../types';
 import { getTeamColor } from '../utils/colors';
 import { LoadingSpinner } from './LoadingSpinner';
 import { cacheUtils } from '../utils/cache';
+import { apiQueue } from '../utils/apiQueue';
+import { ApiIntervalResponse, ApiPositionResponse } from '../types/api';
 
 interface Props {
   sessionId: number;
@@ -99,21 +101,25 @@ export const GapDisplay: React.FC<Props> = ({
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const fetchDataForDriver = async (driver: Driver, dataType: 'intervals' | 'positions') => {
+        const fetchDataForDriver = async <T extends 'intervals' | 'positions'>(
+          driver: Driver, 
+          dataType: T
+        ): Promise<T extends 'intervals' ? IntervalData[] : PositionData[]> => {
           const cacheKey = CACHE_KEY[dataType](sessionId, driver.driver_number);
           const cachedData = cacheUtils.get(cacheKey);
           
-          if (cachedData) return cachedData;
+          if (cachedData) return cachedData as any;
 
           const endpoint = dataType === 'intervals' ? 'intervals' : 'position';
-          const response = await fetch(`/api/${endpoint}?session_key=${sessionId}&driver_number=${driver.driver_number}`);
-          const data = await response.json();
+          const data = await apiQueue.enqueue<ApiIntervalResponse[] | ApiPositionResponse[]>(
+            `/api/${endpoint}?session_key=${sessionId}&driver_number=${driver.driver_number}`
+          );
           
           if (!isLiveSession) {
             cacheUtils.set(cacheKey, data, 24 * 60 * 60 * 1000);
           }
           
-          return data;
+          return data as any;
         };
 
         const [
@@ -129,13 +135,13 @@ export const GapDisplay: React.FC<Props> = ({
         ]);
 
         setIntervalData({
-          [driver1.driver_number]: driver1Intervals || [],
-          [driver2.driver_number]: driver2Intervals || []
+          [driver1.driver_number]: driver1Intervals as IntervalData[],
+          [driver2.driver_number]: driver2Intervals as IntervalData[]
         });
 
         setPositionData({
-          [driver1.driver_number]: driver1Positions || [],
-          [driver2.driver_number]: driver2Positions || []
+          [driver1.driver_number]: driver1Positions as PositionData[],
+          [driver2.driver_number]: driver2Positions as PositionData[]
         });
 
         setIsLoading(false);

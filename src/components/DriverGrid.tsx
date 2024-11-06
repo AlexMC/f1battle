@@ -3,6 +3,8 @@ import { Driver, PositionData } from '../types';
 import { getTeamColor } from '../utils/colors';
 import { LoadingSpinner } from './LoadingSpinner';
 import { cacheUtils } from '../utils/cache';
+import { apiQueue } from '../utils/apiQueue';
+import { ApiPositionResponse } from '../types/api';
 
 interface Props {
   sessionId: number;
@@ -36,20 +38,18 @@ export const DriverGrid: React.FC<Props> = ({ sessionId, drivers, isLoading, rac
 
       try {
         // Fetch initial positions for all drivers
-        const positionPromises = drivers.map(driver =>
-          fetch(`/api/position?session_key=${sessionId}&driver_number=${driver.driver_number}`)
-            .then(res => res.json())
-            .then((data: PositionData[]) => {
-              // Sort by date to get the earliest position
-              const sortedData = data.sort((a, b) => 
-                new Date(a.date).getTime() - new Date(b.date).getTime()
-              );
-              return {
-                driver,
-                position: sortedData[0]?.position || 0
-              };
-            })
-        );
+        const positionPromises = drivers.map(async driver => {
+          const data = await apiQueue.enqueue<ApiPositionResponse[]>(
+            `/api/position?session_key=${sessionId}&driver_number=${driver.driver_number}`
+          );
+          const sortedData = data.sort((a, b) => 
+            new Date(a.date).getTime() - new Date(b.date).getTime()
+          );
+          return {
+            driver,
+            position: sortedData[0]?.position || 0
+          };
+        });
 
         const positions = await Promise.all(positionPromises);
         const sortedGrid = positions

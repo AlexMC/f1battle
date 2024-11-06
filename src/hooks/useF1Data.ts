@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Driver, TimingData, Session } from '../types';
 import { cacheUtils } from '../utils/cache';
+import { calculateSessionStartTime } from '../utils/raceTimings';
+import { calculateRaceEndTime } from '../utils/raceTimings';
+import { apiQueue } from '../utils/apiQueue';
+import { ApiDriverResponse } from '../types/api';
 
 const CACHE_KEYS = {
   SESSIONS_2024: 'f1_sessions_2024',
@@ -14,7 +18,6 @@ const CACHE_KEYS = {
 const mapApiSessionToSession = (apiSession: any): Session | null => {
   if (!apiSession || typeof apiSession !== 'object') return null;
 
-  // Determine status based on dates since API doesn't provide status
   let status = 'unknown';
   const now = new Date();
   const startDate = new Date(apiSession.date_start);
@@ -28,13 +31,6 @@ const mapApiSessionToSession = (apiSession: any): Session | null => {
     status = 'scheduled';
   }
 
-  console.log('Session status determined:', {
-    sessionId: apiSession.session_key,
-    startDate,
-    endDate,
-    status
-  });
-
   return {
     session_id: apiSession.session_key,
     session_name: apiSession.session_name,
@@ -45,26 +41,6 @@ const mapApiSessionToSession = (apiSession: any): Session | null => {
     circuit_key: apiSession.circuit_key,
     circuit_short_name: apiSession.circuit_short_name
   };
-};
-
-const calculateSessionStartTime = (timingData: TimingData[]): Date | null => {
-  const lap2RawData = timingData.filter(t => t.lap_number === 2);
-  const sortedData = [...timingData].sort((a, b) => 
-    a.lap_number - b.lap_number || 
-    (a.timestamp - b.timestamp)
-  );
-
-  const lap2Data = sortedData.find(t => t.lap_number === 2);
-
-  if (!lap2Data || !lap2Data.timestamp || !lap2Data.sector_2_time || !lap2Data.sector_3_time) {
-    return null;
-  }
-
-  const lap2Time = new Date(lap2Data.timestamp);
-  const sectorsDuration = (lap2Data.sector_2_time + lap2Data.sector_3_time) * 1000;
-  const calculatedTime = new Date(lap2Time.getTime() - sectorsDuration);
-  
-  return calculatedTime;
 };
 
 const mapLapDataToTimingData = (t: any, sessionId: number) => ({
@@ -78,37 +54,6 @@ const mapLapDataToTimingData = (t: any, sessionId: number) => ({
   session_id: sessionId,
   timestamp: t.date_start ? new Date(t.date_start).getTime() : 0
 });
-
-const calculateRaceEndTime = (timingData: TimingData[]): number => {
-  if (!timingData.length) return 0;
-  
-  // Group timing data by driver
-  const driverLaps = timingData.reduce((acc, lap) => {
-    if (!acc[lap.driver_number]) {
-      acc[lap.driver_number] = [];
-    }
-    acc[lap.driver_number].push(lap);
-    return acc;
-  }, {} as Record<number, TimingData[]>);
-
-  // Calculate total race time for each driver
-  const driverTotalTimes = Object.values(driverLaps).map(laps => {
-    let totalTime = 0;
-    const sortedLaps = [...laps].sort((a, b) => a.lap_number - b.lap_number);
-    
-    for (const lap of sortedLaps) {
-      const sector1 = lap.sector_1_time || 0;
-      const sector2 = lap.sector_2_time || 0;
-      const sector3 = lap.sector_3_time || 0;
-      totalTime += sector1 + sector2 + sector3;
-    }
-    
-    return totalTime;
-  });
-
-  // Return the longest race time (slowest driver)
-  return Math.max(...driverTotalTimes);
-};
 
 export const useF1Data = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -143,9 +88,7 @@ export const useF1Data = () => {
       }
 
       try {
-        const response = await fetch('/api/sessions?year=2024');
-        const data = await response.json();
-        console.log('2024 Sessions API response:', data);
+        const data = await apiQueue.enqueue<any[]>('/api/sessions?year=2024');
 
         if (!isMounted) return;
 
@@ -251,8 +194,9 @@ export const useF1Data = () => {
       }
 
       try {
-        const response = await fetch(`https://api.openf1.org/v1/drivers?session_key=${selectedSession.session_id}`);
-        const driversData = await response.json();
+        const driversData = await apiQueue.enqueue<ApiDriverResponse[]>(
+          `https://api.openf1.org/v1/drivers?session_key=${selectedSession.session_id}`
+        );
         
         const mappedDrivers = driversData
           .filter((d: any) => d && d.driver_number && d.full_name)
@@ -284,7 +228,6 @@ export const useF1Data = () => {
     const fetchTimingData = async () => {
       setIsLoading(true);
 
-      // Only use cache for completed sessions with valid drivers
       if (selectedSession.status === 'completed') {
         const driver1CacheKey = CACHE_KEYS.DRIVER_TIMING(
           selectedSession.session_id,
@@ -298,46 +241,38 @@ export const useF1Data = () => {
         const cachedDriver1 = cacheUtils.get<TimingData[]>(driver1CacheKey);
         const cachedDriver2 = cacheUtils.get<TimingData[]>(driver2CacheKey);
         
-        if (cachedDriver1 && cachedDriver2) {
-          if (isMounted) {
-            setTimingData([...cachedDriver1, ...cachedDriver2]);
-            setIsLoading(false);
-          }
-          return;
-        }
-
-        // If we have one driver cached, only fetch the other
         try {
           let driver1Data = cachedDriver1;
           let driver2Data = cachedDriver2;
 
           if (!cachedDriver1) {
-            const driver1Response = await fetch(`/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver1}`);
-            const rawDriver1Data = await driver1Response.json();
-            driver1Data = Array.isArray(rawDriver1Data) ? rawDriver1Data.map(t => mapLapDataToTimingData(t, selectedSession.session_id)) : [];
-            if (selectedSession.status === 'completed') {
+            const rawDriver1Data = await apiQueue.enqueue(
+              `/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver1}`
+            );
+            driver1Data = Array.isArray(rawDriver1Data) ? 
+              rawDriver1Data.map(t => mapLapDataToTimingData(t, selectedSession.session_id)) : [];
+            if (driver1Data.length > 0) {
               cacheUtils.set(driver1CacheKey, driver1Data, 24 * 60 * 60 * 1000);
             }
           }
 
           if (!cachedDriver2) {
-            const driver2Response = await fetch(`/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver2}`);
-            const rawDriver2Data = await driver2Response.json();
-            driver2Data = Array.isArray(rawDriver2Data) ? rawDriver2Data.map(t => mapLapDataToTimingData(t, selectedSession.session_id)) : [];
-            if (selectedSession.status === 'completed') {
+            const rawDriver2Data = await apiQueue.enqueue(
+              `/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver2}`
+            );
+            driver2Data = Array.isArray(rawDriver2Data) ? 
+              rawDriver2Data.map(t => mapLapDataToTimingData(t, selectedSession.session_id)) : [];
+            if (driver2Data.length > 0) {
               cacheUtils.set(driver2CacheKey, driver2Data, 24 * 60 * 60 * 1000);
             }
           }
-
-          if (!isMounted) return;
 
           const combinedLapsData = [...(driver1Data || []), ...(driver2Data || [])];
           setTimingData(combinedLapsData.sort((a, b) => a.lap_number - b.lap_number));
         } catch (error) {
           console.error('Error fetching timing data:', error);
-          if (isMounted) setTimingData([]);
         } finally {
-          if (isMounted) setIsLoading(false);
+          setIsLoading(false);
         }
       }
     };
@@ -362,20 +297,85 @@ export const useF1Data = () => {
 
   // Add this effect to calculate session start time when timing data changes
   useEffect(() => {
-    if (!selectedSession || !timingData.length) return;
+    if (!selectedSession) {
+      console.log('No selected session, skipping start time calculation');
+      return;
+    }
 
+    // For active sessions, always use the session date
     if (selectedSession.status === 'active') {
       const startTime = new Date(selectedSession.date);
       setSessionStartTime(startTime);
-    } else {
-      const calculatedStartTime = calculateSessionStartTime(timingData);
-      const finalStartTime = calculatedStartTime || new Date(selectedSession.date);
-      setSessionStartTime(finalStartTime);
+      return;
     }
+
+    // For completed sessions with no timing data yet, use session date temporarily
+    if (timingData.length === 0) {
+      const tempStartTime = new Date(selectedSession.date);
+      setSessionStartTime(tempStartTime);
+      return;
+    }
+
+    // Now we have timing data, calculate the actual start time
+    const calculatedStartTime = calculateSessionStartTime(timingData);
+    
+    if (calculatedStartTime) {
+      setSessionStartTime(calculatedStartTime);
+    } else {
+      setSessionStartTime(new Date(selectedSession.date));
+    }
+
   }, [selectedSession, timingData]);
 
   const setSelectedSession = (session: Session | null) => {
     _setSelectedSession(session);
+    
+    // Reset selected drivers when session changes
+    setSelectedDrivers({ driver1: null, driver2: null });
+    
+    if (session) {
+      // First check cache
+      const cacheKey = CACHE_KEYS.DRIVERS(session.session_id);
+      const cachedDrivers = cacheUtils.get<Driver[]>(cacheKey);
+      
+      if (cachedDrivers && cachedDrivers.length >= 2) {
+        console.log('Auto-selecting first two drivers from cache:', {
+          driver1: cachedDrivers[0].driver_number,
+          driver2: cachedDrivers[1].driver_number
+        });
+        setSelectedDrivers({
+          driver1: cachedDrivers[0].driver_number,
+          driver2: cachedDrivers[1].driver_number
+        });
+      } else {
+        // If not cached, fetch drivers and then select
+        apiQueue.enqueue<ApiDriverResponse[]>(`/api/drivers?session_key=${session.session_id}`)
+          .then(data => {
+            const mappedDrivers = data.map(d => ({
+              driver_number: d.driver_number,
+              driver_name: d.driver_name,
+              team_name: d.team_name
+            }));
+            
+            if (mappedDrivers.length >= 2) {
+              console.log('Auto-selecting first two drivers from API:', {
+                driver1: mappedDrivers[0].driver_number,
+                driver2: mappedDrivers[1].driver_number
+              });
+              setSelectedDrivers({
+                driver1: mappedDrivers[0].driver_number,
+                driver2: mappedDrivers[1].driver_number
+              });
+            }
+            
+            // Cache the drivers for future use
+            cacheUtils.set(cacheKey, mappedDrivers, 24 * 60 * 60 * 1000);
+          })
+          .catch(error => {
+            console.error('Error fetching drivers:', error);
+          });
+      }
+    }
   };
 
   return { 
