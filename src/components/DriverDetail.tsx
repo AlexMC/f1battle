@@ -1,9 +1,11 @@
 import React from 'react';
-import { Driver, PositionData } from '../types';
+import { Driver } from '../types';
 import { getTeamColor } from '../utils/colors';
 import { RadioMessageIndicator } from './RadioMessageIndicator';
 import { useDriverPosition } from '../hooks/useDriverPosition';
+import { useCarData } from '../hooks/useCarData';
 import { LoadingSpinner } from './LoadingSpinner';
+import { TelemetryDisplay } from './TelemetryDisplay';
 
 interface Props {
   sessionId: number;
@@ -22,14 +24,21 @@ export const DriverDetail: React.FC<Props> = ({
   raceTime,
   sessionStartTime
 }) => {
-  const { currentPosition, isLoading } = useDriverPosition({
+  const { currentPosition, isLoading: isLoadingPosition } = useDriverPosition({
     sessionId,
     driver,
     raceTime,
     sessionStartTime
   });
 
-  if (isLoading) {
+  const { currentData: carData, isLoading: isLoadingCarData } = useCarData(
+    sessionId,
+    driver.driver_number,
+    raceTime,
+    sessionStartTime
+  );
+
+  if (isLoadingPosition) {
     return <LoadingSpinner />;
   }
 
@@ -68,7 +77,10 @@ export const DriverDetail: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Add more driver details here in future iterations */}
+        <TelemetryDisplay 
+          data={carData} 
+          isLoading={isLoadingCarData} 
+        />
       </div>
     </div>
   );
