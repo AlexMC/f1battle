@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Driver, TimingData, Session } from '../types';
-import { cacheUtils } from '../utils/cache';
 import { calculateSessionStartTime } from '../utils/raceTimings';
 import { calculateRaceEndTime } from '../utils/raceTimings';
 import { apiQueue } from '../utils/apiQueue';
 import { ApiDriverResponse } from '../types/api';
+import { redisCacheUtils } from '../utils/redisCache';
 
 const CACHE_KEYS = {
   SESSIONS_2024: 'f1_sessions_2024',
@@ -72,22 +72,22 @@ export const useF1Data = () => {
     const fetch2024Sessions = async () => {
       if (has2024Data) return;
       
-      // Try to get from cache first
-      const cachedSessions = cacheUtils.get<Session[]>(CACHE_KEYS.SESSIONS_2024);
-      if (cachedSessions) {
-        setSessions(prev => {
-          const uniqueSessions = [...prev, ...cachedSessions]
-            .filter((session, index, self) => 
-              index === self.findIndex((s) => s.session_id === session.session_id)
-            )
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          return uniqueSessions;
-        });
-        setHas2024Data(true);
-        return;
-      }
-
       try {
+        // Try to get from cache first
+        const cachedSessions = await redisCacheUtils.get<Session[]>(CACHE_KEYS.SESSIONS_2024);
+        if (cachedSessions) {
+          setSessions(prev => {
+            const uniqueSessions = [...prev, ...cachedSessions]
+              .filter((session, index, self) => 
+                index === self.findIndex((s) => s.session_id === session.session_id)
+              )
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            return uniqueSessions;
+          });
+          setHas2024Data(true);
+          return;
+        }
+
         const data = await apiQueue.enqueue<any[]>('/api/sessions?year=2024');
 
         if (!isMounted) return;
@@ -98,7 +98,7 @@ export const useF1Data = () => {
           .filter((session): session is Session => session !== null);
 
         // Cache the results
-        cacheUtils.set(CACHE_KEYS.SESSIONS_2024, mapped2024Sessions);
+        await redisCacheUtils.set(CACHE_KEYS.SESSIONS_2024, mapped2024Sessions);
 
         setSessions(prev => {
           const uniqueSessions = [...prev, ...mapped2024Sessions]
@@ -186,7 +186,7 @@ export const useF1Data = () => {
     const fetchDrivers = async () => {
       // Try to get from cache first
       const cacheKey = CACHE_KEYS.DRIVERS(selectedSession.session_id);
-      const cachedDrivers = cacheUtils.get<Driver[]>(cacheKey);
+      const cachedDrivers = await redisCacheUtils.get<Driver[]>(cacheKey);
       
       if (cachedDrivers) {
         setDrivers(cachedDrivers);
@@ -209,7 +209,7 @@ export const useF1Data = () => {
           }));
 
         // Cache the results
-        cacheUtils.set(cacheKey, mappedDrivers);
+        await redisCacheUtils.set(cacheKey, mappedDrivers, 24 * 60 * 60 * 1000);
         setDrivers(mappedDrivers);
       } catch (error) {
         console.error('Error fetching drivers:', error);
@@ -238,8 +238,8 @@ export const useF1Data = () => {
           selectedDrivers.driver2!
         );
         
-        const cachedDriver1 = cacheUtils.get<TimingData[]>(driver1CacheKey);
-        const cachedDriver2 = cacheUtils.get<TimingData[]>(driver2CacheKey);
+        const cachedDriver1 = await redisCacheUtils.get<TimingData[]>(driver1CacheKey);
+        const cachedDriver2 = await redisCacheUtils.get<TimingData[]>(driver2CacheKey);
         
         try {
           let driver1Data = cachedDriver1;
@@ -252,7 +252,7 @@ export const useF1Data = () => {
             driver1Data = Array.isArray(rawDriver1Data) ? 
               rawDriver1Data.map(t => mapLapDataToTimingData(t, selectedSession.session_id)) : [];
             if (driver1Data.length > 0) {
-              cacheUtils.set(driver1CacheKey, driver1Data, 24 * 60 * 60 * 1000);
+              await redisCacheUtils.set(driver1CacheKey, driver1Data, 24 * 60 * 60 * 1000);
             }
           }
 
@@ -263,7 +263,7 @@ export const useF1Data = () => {
             driver2Data = Array.isArray(rawDriver2Data) ? 
               rawDriver2Data.map(t => mapLapDataToTimingData(t, selectedSession.session_id)) : [];
             if (driver2Data.length > 0) {
-              cacheUtils.set(driver2CacheKey, driver2Data, 24 * 60 * 60 * 1000);
+              await redisCacheUtils.set(driver2CacheKey, driver2Data, 24 * 60 * 60 * 1000);
             }
           }
 
@@ -327,7 +327,7 @@ export const useF1Data = () => {
 
   }, [selectedSession, timingData]);
 
-  const setSelectedSession = (session: Session | null) => {
+  const setSelectedSession = async (session: Session | null) => {
     _setSelectedSession(session);
     
     // Reset selected drivers when session changes
@@ -336,7 +336,7 @@ export const useF1Data = () => {
     if (session) {
       // First check cache
       const cacheKey = CACHE_KEYS.DRIVERS(session.session_id);
-      const cachedDrivers = cacheUtils.get<Driver[]>(cacheKey);
+      const cachedDrivers = await redisCacheUtils.get<Driver[]>(cacheKey);
       
       if (cachedDrivers && cachedDrivers.length >= 2) {
         console.log('Auto-selecting first two drivers from cache:', {
@@ -350,7 +350,7 @@ export const useF1Data = () => {
       } else {
         // If not cached, fetch drivers and then select
         apiQueue.enqueue<ApiDriverResponse[]>(`/api/drivers?session_key=${session.session_id}`)
-          .then(data => {
+          .then(async data => {
             const mappedDrivers = data.map(d => ({
               driver_number: d.driver_number,
               driver_name: d.driver_name,
@@ -369,7 +369,7 @@ export const useF1Data = () => {
             }
             
             // Cache the drivers for future use
-            cacheUtils.set(cacheKey, mappedDrivers, 24 * 60 * 60 * 1000);
+            await redisCacheUtils.set(cacheKey, mappedDrivers, 24 * 60 * 60 * 1000);
           })
           .catch(error => {
             console.error('Error fetching drivers:', error);

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Driver, PositionData } from '../types';
 import { findPositionAtTime } from '../utils/positions';
-import { cacheUtils } from '../utils/cache';
 import { apiQueue } from '../utils/apiQueue';
 import { ApiPositionResponse } from '../types/api';
 import { mapApiPositionToPositionData } from '../utils/apiMappers';
+import { redisCacheUtils } from '../utils/redisCache';
 
 interface UseDriverPositionProps {
   sessionId: number;
@@ -34,7 +34,7 @@ export const useDriverPosition = ({
 
       try {
         const cacheKey = CACHE_KEY.positions(sessionId, driver.driver_number);
-        const cachedData = cacheUtils.get<PositionData[]>(cacheKey);
+        const cachedData = await redisCacheUtils.get<PositionData[]>(cacheKey);
         
         if (cachedData) {
           setPositionData(cachedData);
@@ -46,7 +46,7 @@ export const useDriverPosition = ({
           `/api/position?session_key=${sessionId}&driver_number=${driver.driver_number}`
         );
         const mappedData = data.map(pos => mapApiPositionToPositionData(pos, sessionId));
-        cacheUtils.set(cacheKey, mappedData, 24 * 60 * 60 * 1000);
+        await redisCacheUtils.set(cacheKey, mappedData, 24 * 60 * 60 * 1000);
         
         setPositionData(mappedData);
         setIsLoading(false);

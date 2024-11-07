@@ -104,6 +104,7 @@ export const RaceTime: React.FC = () => {
                 onBack={handleBackToGrid}
                 raceTime={timeline.raceTime}
                 sessionStartTime={timeline.sessionStartTime}
+                circuitKey={selectedSession?.circuit_short_name?.toLowerCase() || 'bahrain'}
               />
             ) : (
               <DriverGrid 
