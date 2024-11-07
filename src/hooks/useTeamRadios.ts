@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { TeamRadio, Driver } from '../types';
-import { cacheUtils } from '../utils/cache';
+import { redisCacheUtils } from '../utils/redisCache';
 import { apiQueue } from '../utils/apiQueue';
 
 export const RADIO_CACHE_KEY = (sessionId: number, driverNumber: number) =>
@@ -22,7 +22,6 @@ export const useTeamRadios = (
   const [radioMessages, setRadioMessages] = useState<{[key: number]: TeamRadio[]}>({});
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch radio messages
   useEffect(() => {
     const fetchRadioMessages = async () => {
       if (!sessionId || drivers.length === 0) return;
@@ -30,14 +29,14 @@ export const useTeamRadios = (
       try {
         const radioPromises = drivers.map(async driver => {
           const cacheKey = RADIO_CACHE_KEY(sessionId, driver.driver_number);
-          const cachedData = cacheUtils.get<TeamRadio[]>(cacheKey);
+          const cachedData = await redisCacheUtils.get<TeamRadio[]>(cacheKey);
           
           if (cachedData) return { driver: driver, data: cachedData };
 
           const data = await apiQueue.enqueue<TeamRadio[]>(
             `/api/team_radio?session_key=${sessionId}&driver_number=${driver.driver_number}`
           );
-          cacheUtils.set(cacheKey, data, 24 * 60 * 60 * 1000);
+          await redisCacheUtils.set(cacheKey, data, 24 * 60 * 60 * 1000);
           return { driver: driver, data };
         });
 

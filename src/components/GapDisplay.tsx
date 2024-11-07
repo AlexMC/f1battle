@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Driver, IntervalData, PositionData } from '../types';
 import { getTeamColor } from '../utils/colors';
 import { LoadingSpinner } from './LoadingSpinner';
-import { cacheUtils } from '../utils/cache';
+import { redisCacheUtils } from '../utils/redisCache';
 import { apiQueue } from '../utils/apiQueue';
 import { ApiIntervalResponse, ApiPositionResponse } from '../types/api';
 import { findPositionAtTime } from '../utils/positions';
@@ -70,7 +70,7 @@ export const GapDisplay: React.FC<Props> = ({
           dataType: T
         ): Promise<T extends 'intervals' ? IntervalData[] : PositionData[]> => {
           const cacheKey = CACHE_KEY[dataType](sessionId, driver.driver_number);
-          const cachedData = cacheUtils.get(cacheKey);
+          const cachedData = await redisCacheUtils.get(cacheKey);
           
           if (cachedData) return cachedData as any;
 
@@ -80,7 +80,7 @@ export const GapDisplay: React.FC<Props> = ({
           );
           
           if (!isLiveSession) {
-            cacheUtils.set(cacheKey, data, 24 * 60 * 60 * 1000);
+            await redisCacheUtils.set(cacheKey, data, 24 * 60 * 60 * 1000);
           }
           
           return data as any;

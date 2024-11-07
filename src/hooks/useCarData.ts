@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CarData } from '../types';
-import { cacheUtils } from '../utils/cache';
+import { redisCacheUtils } from '../utils/redisCache';
 import { apiQueue } from '../utils/apiQueue';
 import { findCarDataAtTime } from '../utils/carData';
 
@@ -25,7 +25,6 @@ export const useCarData = (
   const [currentData, setCurrentData] = useState<CarData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch car data in chunks
   useEffect(() => {
     const fetchCarDataChunk = async (startTime: Date, endTime: Date, retryCount = 0) => {
       try {
@@ -52,7 +51,7 @@ export const useCarData = (
         const chunks: { startTime: Date; endTime: Date }[] = [];
         let currentStartTime = new Date(sessionStartTime);
 
-        for (let i = 0; i < Math.ceil(180 / CHUNK_SIZE_MINUTES); i++) { // Assume max 3 hours
+        for (let i = 0; i < Math.ceil(180 / CHUNK_SIZE_MINUTES); i++) {
           const endTime = new Date(currentStartTime.getTime() + CHUNK_SIZE_MINUTES * 60 * 1000);
           chunks.push({ startTime: currentStartTime, endTime });
           currentStartTime = endTime;
@@ -68,7 +67,7 @@ export const useCarData = (
             chunk.startTime.toISOString()
           );
           
-          const cachedChunk = cacheUtils.get<CarData[]>(chunkCacheKey);
+          const cachedChunk = await redisCacheUtils.get<CarData[]>(chunkCacheKey);
 
           if (cachedChunk) {
             allData = [...allData, ...cachedChunk];
@@ -78,17 +77,16 @@ export const useCarData = (
           const chunkData = await fetchCarDataChunk(chunk.startTime, chunk.endTime);
           
           if (chunkData.length === 0) {
-            // If chunk is empty, we've probably reached the end of the session
             break;
           }
 
-          cacheUtils.set(chunkCacheKey, chunkData, 24 * 60 * 60 * 1000);
+          await redisCacheUtils.set(chunkCacheKey, chunkData, 24 * 60 * 60 * 1000);
           allData = [...allData, ...chunkData];
         }
 
         // Cache the complete dataset
         const cacheKey = CACHE_KEY.carData(sessionId, driverNumber);
-        cacheUtils.set(cacheKey, allData, 24 * 60 * 60 * 1000);
+        await redisCacheUtils.set(cacheKey, allData, 24 * 60 * 60 * 1000);
         setCarData(allData);
         setIsLoading(false);
       } catch (error) {
@@ -100,7 +98,6 @@ export const useCarData = (
     fetchCarData();
   }, [sessionId, driverNumber, sessionStartTime]);
 
-  // Update current data based on race time
   useEffect(() => {
     const data = findCarDataAtTime(carData, raceTime, sessionStartTime);
     setCurrentData(data);
