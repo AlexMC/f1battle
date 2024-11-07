@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Driver, IntervalData, PositionData } from '../types';
 import { getTeamColor } from '../utils/colors';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -7,6 +7,7 @@ import { apiQueue } from '../utils/apiQueue';
 import { ApiIntervalResponse, ApiPositionResponse } from '../types/api';
 import { findPositionAtTime } from '../utils/positions';
 import { findDataAtTime } from '../utils/timing';
+import { useDriverPosition } from '../hooks/useDriverPosition';
 
 interface Props {
   sessionId: number;
@@ -25,6 +26,15 @@ const CACHE_KEY = {
     `f1_positions_${sessionId}_${driverNumber}`
 };
 
+interface GapData {
+  gap: number;
+  ahead: Driver;
+  behind: Driver;
+  positions: {
+    [key: number]: number;
+  };
+}
+
 export const GapDisplay: React.FC<Props> = ({
   sessionId,
   driver1,
@@ -35,40 +45,22 @@ export const GapDisplay: React.FC<Props> = ({
   sessionStartTime
 }) => {
   const [intervalData, setIntervalData] = useState<{[key: number]: IntervalData[]}>({});
-  const [positionData, setPositionData] = useState<{[key: number]: PositionData[]}>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [currentGap, setCurrentGap] = useState<ReturnType<typeof getCurrentGap>>(null);
+  const [currentGap, setCurrentGap] = useState<GapData | null>(null);
 
-  const getCurrentGap = useCallback(() => {
-    const driver1Intervals = intervalData[driver1.driver_number] || [];
-    const driver2Intervals = intervalData[driver2.driver_number] || [];
-    const driver1Positions = positionData[driver1.driver_number] || [];
-    const driver2Positions = positionData[driver2.driver_number] || [];
+  const { currentPosition: driver1CurrentPosition } = useDriverPosition({
+    sessionId,
+    driver: driver1,
+    raceTime,
+    sessionStartTime
+  });
 
-    if (!driver1Intervals.length || !driver2Intervals.length) return null;
-
-    const driver1Position = findPositionAtTime(driver1Positions, raceTime, sessionStartTime);
-    const driver2Position = findPositionAtTime(driver2Positions, raceTime, sessionStartTime);
-
-    const driver1Interval = findDataAtTime(driver1Intervals, raceTime, sessionStartTime);
-    const driver2Interval = findDataAtTime(driver2Intervals, raceTime, sessionStartTime);
-
-    if (!driver1Interval || !driver2Interval) return null;
-
-    const gap = Math.abs(driver1Interval.gap_to_leader - driver2Interval.gap_to_leader);
-
-    if (gap === 0 || isNaN(gap)) return null;
-
-    return {
-      gap,
-      ahead: driver1Interval.gap_to_leader < driver2Interval.gap_to_leader ? driver1 : driver2,
-      behind: driver1Interval.gap_to_leader < driver2Interval.gap_to_leader ? driver2 : driver1,
-      positions: {
-        [driver1.driver_number]: driver1Position,
-        [driver2.driver_number]: driver2Position
-      }
-    };
-  }, [intervalData, positionData, driver1, driver2, raceTime, sessionStartTime]);
+  const { currentPosition: driver2CurrentPosition } = useDriverPosition({
+    sessionId,
+    driver: driver2,
+    raceTime,
+    sessionStartTime
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -111,11 +103,6 @@ export const GapDisplay: React.FC<Props> = ({
           [driver2.driver_number]: driver2Intervals as IntervalData[]
         });
 
-        setPositionData({
-          [driver1.driver_number]: driver1Positions as PositionData[],
-          [driver2.driver_number]: driver2Positions as PositionData[]
-        });
-
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -138,9 +125,44 @@ export const GapDisplay: React.FC<Props> = ({
   }, [sessionId, driver1.driver_number, driver2.driver_number, isLiveSession]);
 
   useEffect(() => {
-    const gap = getCurrentGap();
+    const calculateCurrentGap = () => {
+      const driver1Intervals = intervalData[driver1.driver_number] || [];
+      const driver2Intervals = intervalData[driver2.driver_number] || [];
+
+      if (!driver1Intervals.length || !driver2Intervals.length) return null;
+
+      const driver1Interval = findDataAtTime(driver1Intervals, raceTime, sessionStartTime);
+      const driver2Interval = findDataAtTime(driver2Intervals, raceTime, sessionStartTime);
+
+      if (!driver1Interval || !driver2Interval) return null;
+
+      const gap = Math.abs(driver1Interval.gap_to_leader - driver2Interval.gap_to_leader);
+
+      if (gap === 0 || isNaN(gap)) return null;
+
+      return {
+        gap,
+        ahead: driver1Interval.gap_to_leader < driver2Interval.gap_to_leader ? driver1 : driver2,
+        behind: driver1Interval.gap_to_leader < driver2Interval.gap_to_leader ? driver2 : driver1,
+        positions: {
+          [driver1.driver_number]: driver1CurrentPosition,
+          [driver2.driver_number]: driver2CurrentPosition
+        }
+      };
+    };
+
+    const gap = calculateCurrentGap();
     setCurrentGap(gap);
-  }, [localTime, intervalData, positionData, getCurrentGap]);
+  }, [
+    localTime,
+    intervalData,
+    driver1,
+    driver2,
+    raceTime,
+    sessionStartTime,
+    driver1CurrentPosition,
+    driver2CurrentPosition
+  ]);
 
   if (isLoading) {
     return <LoadingSpinner />;

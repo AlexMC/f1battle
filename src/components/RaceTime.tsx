@@ -4,9 +4,19 @@ import { DriverGrid } from './DriverGrid';
 import { SimulationControls } from './SimulationControls';
 import { useF1Data } from '../hooks/useF1Data';
 import { useTimelineManager } from '../hooks/useTimelineManager';
+import { DriverDetail } from './DriverDetail';
+import { Driver } from '../types';
+import { useTeamRadios } from '../hooks/useTeamRadios';
+
+interface SelectedDriverData {
+  driver: Driver;
+  position: number;
+  availableRadioMessages: number;
+}
 
 export const RaceTime: React.FC = () => {
   const [isSimulationStarted, setIsSimulationStarted] = useState(false);
+  const [selectedDriverData, setSelectedDriverData] = useState<SelectedDriverData | null>(null);
   const { 
     sessions, 
     selectedSession, 
@@ -25,9 +35,28 @@ export const RaceTime: React.FC = () => {
     raceEndTime
   });
 
+  const { radioMessages, isLoading: isLoadingRadios } = useTeamRadios(
+    selectedSession?.session_id || 0,
+    drivers,  // Pass all drivers to get all radio messages at once
+    timeline.raceTime,
+    timeline.sessionStartTime
+  );
+
   const handleStartSimulation = () => {
     setIsSimulationStarted(true);
     timeline.setPaused(false);
+  };
+
+  const handleSelectDriver = (
+    driver: Driver, 
+    position: number, 
+    availableRadioMessages: number
+  ) => {
+    setSelectedDriverData({ driver, position, availableRadioMessages });
+  };
+
+  const handleBackToGrid = () => {
+    setSelectedDriverData(null);
   };
 
   return (
@@ -67,13 +96,27 @@ export const RaceTime: React.FC = () => {
               />
             </div>
 
-            <DriverGrid 
-              sessionId={selectedSession.session_id}
-              drivers={drivers}
-              isLoading={isLoading}
-              raceTime={timeline.raceTime}
-              sessionStartTime={timeline.sessionStartTime}
-            />
+            {selectedDriverData ? (
+              <DriverDetail 
+                sessionId={selectedSession.session_id}
+                driver={selectedDriverData.driver}
+                availableRadioMessages={selectedDriverData.availableRadioMessages}
+                onBack={handleBackToGrid}
+                raceTime={timeline.raceTime}
+                sessionStartTime={timeline.sessionStartTime}
+              />
+            ) : (
+              <DriverGrid 
+                sessionId={selectedSession.session_id}
+                drivers={drivers}
+                isLoading={isLoading || isLoadingRadios}
+                raceTime={timeline.raceTime}
+                sessionStartTime={timeline.sessionStartTime}
+                onSelectDriver={handleSelectDriver}
+                selectedDriver={null}
+                radioMessages={radioMessages}  // Pass down radio messages
+              />
+            )}
           </>
         )}
       </div>
