@@ -7,6 +7,8 @@ import { useCarData } from '../hooks/useCarData';
 import { LoadingSpinner } from './LoadingSpinner';
 import { TelemetryDisplay } from './TelemetryDisplay';
 import { TrackVector } from './TrackVector';
+import { useLocationData } from '../hooks/useLocationData';
+import { LocationDisplay } from './LocationDisplay';
 
 interface Props {
   sessionId: number;
@@ -35,6 +37,13 @@ export const DriverDetail: React.FC<Props> = ({
   });
 
   const { currentData: carData, isLoading: isLoadingCarData } = useCarData(
+    sessionId,
+    driver.driver_number,
+    raceTime,
+    sessionStartTime
+  );
+
+  const { currentLocation, isLoading: locationLoading } = useLocationData(
     sessionId,
     driver.driver_number,
     raceTime,
@@ -87,6 +96,14 @@ export const DriverDetail: React.FC<Props> = ({
         <TelemetryDisplay 
           data={carData} 
           isLoading={isLoadingCarData} 
+        />
+      </div>
+
+      <div className="mt-4">
+        <h3 className="text-sm font-medium text-gray-400 mb-2">Position Data</h3>
+        <LocationDisplay 
+          location={currentLocation} 
+          isLoading={locationLoading} 
         />
       </div>
     </div>
