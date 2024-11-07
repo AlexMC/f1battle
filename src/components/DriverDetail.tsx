@@ -6,6 +6,7 @@ import { useDriverPosition } from '../hooks/useDriverPosition';
 import { useCarData } from '../hooks/useCarData';
 import { LoadingSpinner } from './LoadingSpinner';
 import { TelemetryDisplay } from './TelemetryDisplay';
+import { TrackVector } from './TrackVector';
 
 interface Props {
   sessionId: number;
@@ -14,6 +15,7 @@ interface Props {
   onBack: () => void;
   raceTime: number;
   sessionStartTime: Date;
+  circuitKey: string;
 }
 
 export const DriverDetail: React.FC<Props> = ({ 
@@ -22,7 +24,8 @@ export const DriverDetail: React.FC<Props> = ({
   availableRadioMessages,
   onBack,
   raceTime,
-  sessionStartTime
+  sessionStartTime,
+  circuitKey
 }) => {
   const { currentPosition, isLoading: isLoadingPosition } = useDriverPosition({
     sessionId,
@@ -75,6 +78,10 @@ export const DriverDetail: React.FC<Props> = ({
               {driver.team_name} | #{driver.driver_number}
             </div>
           </div>
+          <TrackVector 
+            circuitKey={circuitKey}
+            className="w-32 h-32 opacity-25"
+          />
         </div>
 
         <TelemetryDisplay 
@@ -84,4 +91,4 @@ export const DriverDetail: React.FC<Props> = ({
       </div>
     </div>
   );
-}; 
+};
