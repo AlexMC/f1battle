@@ -40,21 +40,30 @@ export const LocationPath: React.FC<Props> = ({
 
   if (!xValues.length || !yValues.length) return null;
 
-  const maxAbsX = Math.max(Math.abs(Math.min(...xValues)), Math.abs(Math.max(...xValues)));
-  const maxAbsY = Math.max(Math.abs(Math.min(...yValues)), Math.abs(Math.max(...yValues)));
+  // Calculate the center of the points
+  const centerX = (Math.min(...xValues) + Math.max(...xValues)) / 2;
+  const centerY = (Math.min(...yValues) + Math.max(...yValues)) / 2;
 
-  const aspectRatio = maxAbsY / maxAbsX;
+  // Calculate the range (use the larger of width/height for aspect ratio)
+  const rangeX = Math.max(...xValues) - Math.min(...xValues);
+  const rangeY = Math.max(...yValues) - Math.min(...yValues);
+  const maxRange = Math.max(rangeX, rangeY);
+
+  // Fixed aspect ratio of 1:1 for square display
+  const aspectRatio = 1;
   const svgWidth = baseWidth;
   const svgHeight = baseWidth * aspectRatio;
 
   const scaleX = (x: number) => {
     if (typeof x !== 'number' || isNaN(x)) return svgWidth / 2;
-    return ((x / maxAbsX) * (svgWidth - 2 * padding) / 2) + (svgWidth / 2);
+    // Center the point by subtracting centerX, then scale relative to maxRange
+    return ((x - centerX) / (maxRange / 2)) * ((svgWidth - 2 * padding) / 2) + (svgWidth / 2);
   };
   
   const scaleY = (y: number) => {
     if (typeof y !== 'number' || isNaN(y)) return svgHeight / 2;
-    return ((-y / maxAbsY) * (svgHeight - 2 * padding) / 2) + (svgHeight / 2);
+    // Center the point by subtracting centerY, then scale relative to maxRange
+    return (-(y - centerY) / (maxRange / 2)) * ((svgHeight - 2 * padding) / 2) + (svgHeight / 2);
   };
 
   return (
