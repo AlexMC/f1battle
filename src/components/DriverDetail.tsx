@@ -9,6 +9,7 @@ import { TelemetryDisplay } from './TelemetryDisplay';
 import { TrackVector } from './TrackVector';
 import { useLocationData } from '../hooks/useLocationData';
 import { LocationDisplay } from './LocationDisplay';
+import { LocationPath } from './LocationPath';
 
 interface Props {
   sessionId: number;
@@ -104,6 +105,10 @@ export const DriverDetail: React.FC<Props> = ({
         <LocationDisplay 
           location={currentLocation} 
           isLoading={locationLoading} 
+        />
+        <LocationPath
+          location={currentLocation}
+          teamColor={getTeamColor(driver.team_name)}
         />
       </div>
     </div>
