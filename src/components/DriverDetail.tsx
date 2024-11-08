@@ -109,6 +109,7 @@ export const DriverDetail: React.FC<Props> = ({
         <LocationPath
           location={currentLocation}
           teamColor={getTeamColor(driver.team_name)}
+          sessionId={sessionId}
         />
       </div>
     </div>

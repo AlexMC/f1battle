@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Driver, TimingData, Session } from '../types';
+import { Driver, TimingData, Session, LocationData } from '../types';
 import { calculateSessionStartTime } from '../utils/raceTimings';
 import { calculateRaceEndTime } from '../utils/raceTimings';
 import { apiQueue } from '../utils/apiQueue';
 import { ApiDriverResponse } from '../types/api';
 import { redisCacheUtils } from '../utils/redisCache';
+import { calculateTrackScalingFactors } from '../utils/trackScaling';
 
 const CACHE_KEYS = {
   SESSIONS_2024: 'f1_sessions_2024',
@@ -64,6 +65,7 @@ export const useF1Data = () => {
   const [has2024Data, setHas2024Data] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
+  const [trackScalingInitialized, setTrackScalingInitialized] = useState<{[key: number]: boolean}>({});
 
   // Separate effect for fetching 2024 sessions (one-time)
   useEffect(() => {
@@ -382,6 +384,23 @@ export const useF1Data = () => {
     return calculateRaceEndTime(timingData);
   }, [timingData]);
 
+  const initializeTrackScaling = async (sessionId: number, driverNumber: number) => {
+    if (trackScalingInitialized[sessionId]) return;
+    
+    try {
+      const scalingFactors = await calculateTrackScalingFactors(sessionId, driverNumber);
+      setTrackScalingInitialized(prev => ({ ...prev, [sessionId]: true }));
+    } catch (error) {
+      console.error('Error calculating track scaling factors:', error);
+    }
+  };
+
+  // Add new effect for track scaling initialization
+  useEffect(() => {
+    if (!selectedSession) return;
+    initializeTrackScaling(selectedSession.session_id, 1);
+  }, [selectedSession]);
+
   return { 
     sessions, 
     selectedSession, 
@@ -391,6 +410,7 @@ export const useF1Data = () => {
     setSelectedDrivers,
     isLoading,
     sessionStartTime,
-    raceEndTime
+    raceEndTime,
+    trackScalingInitialized
   };
 }; 

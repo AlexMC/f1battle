@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { LocationData } from '../types';
+import { redisCacheUtils } from '../utils/redisCache';
 
 interface Props {
   location: LocationData | null;
   teamColor: string;
+  sessionId: number;
+}
+
+interface ScalingFactors {
+  centerX: number;
+  centerY: number;
+  maxRange: number;
 }
 
 export const LocationPath: React.FC<Props> = ({ 
   location, 
-  teamColor
+  teamColor,
+  sessionId
 }) => {
   // Extract the hex color from the Tailwind class
   const extractColor = (colorClass: string) => {
@@ -18,12 +27,26 @@ export const LocationPath: React.FC<Props> = ({
 
   const color = extractColor(teamColor);
   const [positions, setPositions] = useState<LocationData[]>([]);
+  const [scalingFactors, setScalingFactors] = useState<ScalingFactors | null>(null);
+  
   const baseWidth = 300;
   const padding = 20;
 
+  // Load scaling factors on mount
+  useEffect(() => {
+    const loadScalingFactors = async () => {
+      if (!sessionId) return;
+      const factors = await redisCacheUtils.get(`track_scaling_${sessionId}`);
+      if (factors) {
+        setScalingFactors(factors as ScalingFactors);
+      }
+    };
+    loadScalingFactors();
+  }, [sessionId]);
+
+  // Update positions
   useEffect(() => {
     if (!location || typeof location.x !== 'number' || typeof location.y !== 'number') return;
-    
     setPositions(prev => {
       const lastPos = prev[prev.length - 1];
       if (lastPos && lastPos.x === location.x && lastPos.y === location.y) {
@@ -33,37 +56,24 @@ export const LocationPath: React.FC<Props> = ({
     });
   }, [location]);
 
-  if (!positions.length) return null;
+  if (!scalingFactors) return null;
 
-  const xValues = positions.map(p => p.x).filter(x => typeof x === 'number' && !isNaN(x));
-  const yValues = positions.map(p => p.y).filter(y => typeof y === 'number' && !isNaN(y));
-
-  if (!xValues.length || !yValues.length) return null;
-
-  // Calculate the center of the points
-  const centerX = (Math.min(...xValues) + Math.max(...xValues)) / 2;
-  const centerY = (Math.min(...yValues) + Math.max(...yValues)) / 2;
-
-  // Calculate the range (use the larger of width/height for aspect ratio)
-  const rangeX = Math.max(...xValues) - Math.min(...xValues);
-  const rangeY = Math.max(...yValues) - Math.min(...yValues);
-  const maxRange = Math.max(rangeX, rangeY);
-
-  // Fixed aspect ratio of 1:1 for square display
   const aspectRatio = 1;
   const svgWidth = baseWidth;
   const svgHeight = baseWidth * aspectRatio;
 
   const scaleX = (x: number) => {
     if (typeof x !== 'number' || isNaN(x)) return svgWidth / 2;
-    // Center the point by subtracting centerX, then scale relative to maxRange
-    return ((x - centerX) / (maxRange / 2)) * ((svgWidth - 2 * padding) / 2) + (svgWidth / 2);
+    if (!scalingFactors || scalingFactors.maxRange === 0) return svgWidth / 2;
+    return ((x - scalingFactors.centerX) / (scalingFactors.maxRange / 2)) * 
+           ((svgWidth - 2 * padding) / 2) + (svgWidth / 2);
   };
   
   const scaleY = (y: number) => {
     if (typeof y !== 'number' || isNaN(y)) return svgHeight / 2;
-    // Center the point by subtracting centerY, then scale relative to maxRange
-    return (-(y - centerY) / (maxRange / 2)) * ((svgHeight - 2 * padding) / 2) + (svgHeight / 2);
+    if (!scalingFactors || scalingFactors.maxRange === 0) return svgHeight / 2;
+    return (-(y - scalingFactors.centerY) / (scalingFactors.maxRange / 2)) * 
+           ((svgHeight - 2 * padding) / 2) + (svgHeight / 2);
   };
 
   return (
