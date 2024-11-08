@@ -90,7 +90,11 @@ export const DriverDetail: React.FC<Props> = ({
           </div>
           <TrackVector 
             circuitKey={circuitKey}
-            className="w-32 h-32 opacity-25"
+            className="w-40 h-40"
+            location={currentLocation}
+            color={getTeamColor(driver.team_name).match(/\[(#[A-Fa-f0-9]+)\]/)?.[1] || '#ffffff'}
+            sessionId={sessionId}
+            driverNumber={driver.driver_number}
           />
         </div>
 
@@ -100,7 +104,7 @@ export const DriverDetail: React.FC<Props> = ({
         />
       </div>
 
-      <div className="mt-4">
+{/*       <div className="mt-4">
         <h3 className="text-sm font-medium text-gray-400 mb-2">Position Data</h3>
         <LocationDisplay 
           location={currentLocation} 
@@ -111,7 +115,7 @@ export const DriverDetail: React.FC<Props> = ({
           teamColor={getTeamColor(driver.team_name)}
           sessionId={sessionId}
         />
-      </div>
+      </div> */}
     </div>
   );
 };
