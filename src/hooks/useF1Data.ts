@@ -355,7 +355,7 @@ export const useF1Data = () => {
           .then(async data => {
             const mappedDrivers = data.map(d => ({
               driver_number: d.driver_number,
-              driver_name: d.driver_name,
+              driver_name: d.full_name,
               team_name: d.team_name
             }));
             
