@@ -115,12 +115,14 @@ app.get('/db/drivers/:sessionId', async (req: Request, res: Response) => {
     const client = await pool.connect();
     const result = await client.query(`
       SELECT 
-        d.driver_number,
-        d.driver_name as full_name,
-        d.team_name
-      FROM drivers d
-      WHERE d.session_id = $1
-      ORDER BY d.driver_number
+        driver_number,
+        full_name,
+        name_acronym,
+        team_name,
+        session_id
+      FROM drivers 
+      WHERE session_id = $1
+      ORDER BY driver_number ASC
     `, [req.params.sessionId]);
     client.release();
     res.json(result.rows);
