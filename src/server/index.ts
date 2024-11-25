@@ -172,6 +172,40 @@ app.get('/db/timing/:sessionId/:driverNumber', async (req: Request, res: Respons
   }
 });
 
+app.get('/db/position/:sessionId/:driverNumber', async (req: Request, res: Response) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT 
+        session_id,
+        driver_number,
+        position,
+        EXTRACT(EPOCH FROM timestamp) * 1000 as timestamp
+      FROM position_data 
+      WHERE session_id = $1 
+      AND driver_number = $2
+      AND timestamp IS NOT NULL
+      AND position IS NOT NULL
+      ORDER BY timestamp ASC
+    `, [req.params.sessionId, req.params.driverNumber]);
+
+    // Format timestamps and validate data
+    const formattedRows = result.rows.map(row => ({
+      session_id: Number(row.session_id),
+      driver_number: Number(row.driver_number),
+      position: Number(row.position),
+      timestamp: Number(row.timestamp),
+      date: new Date(Number(row.timestamp)).toISOString()
+    }));
+
+    client.release();
+    res.json(formattedRows);
+  } catch (error) {
+    console.error('Error fetching position data from database:', error);
+    res.status(500).json({ error: 'Failed to fetch position data' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Cache server running on port ${port}`);
 });

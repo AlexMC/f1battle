@@ -1,15 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Driver, PositionData, TeamRadio } from '../types';
-import { getTeamColor } from '../utils/colors';
+import React, { useState } from 'react';
+import { Driver, TeamRadio } from '../types';
 import { LoadingSpinner } from './LoadingSpinner';
-import { cacheUtils } from '../utils/cache';
-import { apiQueue } from '../utils/apiQueue';
-import { ApiPositionResponse } from '../types/api';
-import { findPositionAtTime } from '../utils/positions';
-import { mapApiPositionToPositionData } from '../utils/apiMappers';
-import { RadioMessageIndicator } from './RadioMessageIndicator';
-import { useTeamRadios } from '../hooks/useTeamRadios';
-import { useDriverPosition } from '../hooks/useDriverPosition';
 import { DriverGridItem } from './DriverGridItem';
 
 interface Props {
