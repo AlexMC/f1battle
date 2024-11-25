@@ -28,11 +28,30 @@ export const useTeamRadios = (
 
       try {
         const radioPromises = drivers.map(async driver => {
+          // Try database first
+          try {
+            const dbResponse = await fetch(`/db/radio/${sessionId}/${driver.driver_number}`);
+            if (dbResponse.ok) {
+              const dbData = await dbResponse.json();
+              if (dbData.length > 0) {
+                return { driver: driver, data: dbData };
+              }
+            }
+          } catch (error) {
+            console.log('Database fetch failed, trying cache...');
+          }
+
+          // If not in DB, try cache
+          console.log(`Fetching radio messages from cache for session ${sessionId} and driver ${driver.driver_number}`);
           const cacheKey = RADIO_CACHE_KEY(sessionId, driver.driver_number);
           const cachedData = await redisCacheUtils.get<TeamRadio[]>(cacheKey);
           
-          if (cachedData) return { driver: driver, data: cachedData };
+          if (cachedData) {
+            return { driver: driver, data: cachedData };
+          }
 
+          // If not in cache, fetch from API
+          console.log(`Fetching radio messages from API for session ${sessionId} and driver ${driver.driver_number}`);
           const data = await apiQueue.enqueue<TeamRadio[]>(
             `/api/team_radio?session_key=${sessionId}&driver_number=${driver.driver_number}`
           );

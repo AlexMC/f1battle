@@ -206,6 +206,38 @@ app.get('/db/position/:sessionId/:driverNumber', async (req: Request, res: Respo
   }
 });
 
+app.get('/db/radio/:sessionId/:driverNumber', async (req: Request, res: Response) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT 
+        session_id,
+        driver_number,
+        recording_url,
+        EXTRACT(EPOCH FROM timestamp) * 1000 as timestamp
+      FROM team_radio 
+      WHERE session_id = $1 
+      AND driver_number = $2
+      AND timestamp IS NOT NULL
+      ORDER BY timestamp ASC
+    `, [req.params.sessionId, req.params.driverNumber]);
+
+    const formattedRows = result.rows.map(row => ({
+      session_id: Number(row.session_id),
+      driver_number: Number(row.driver_number),
+      recording_url: row.recording_url,
+      timestamp: Number(row.timestamp),
+      date: new Date(Number(row.timestamp)).toISOString()
+    }));
+
+    client.release();
+    res.json(formattedRows);
+  } catch (error) {
+    console.error('Error fetching radio messages from database:', error);
+    res.status(500).json({ error: 'Failed to fetch radio messages' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Cache server running on port ${port}`);
 });
