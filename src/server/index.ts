@@ -135,7 +135,6 @@ app.get('/db/timing/:sessionId/:driverNumber', async (req: Request, res: Respons
     const client = await pool.connect();
     const result = await client.query(`
       SELECT 
-        session_id,
         driver_number,
         lap_number,
         sector_1_time,
@@ -143,13 +142,28 @@ app.get('/db/timing/:sessionId/:driverNumber', async (req: Request, res: Respons
         sector_3_time,
         lap_time,
         gap_to_leader,
-        timestamp
-      FROM timing_data
-      WHERE session_id = $1 AND driver_number = $2
-      ORDER BY lap_number
+        session_id,
+        EXTRACT(EPOCH FROM timestamp) * 1000 as timestamp
+      FROM timing_data 
+      WHERE session_id = $1 
+      AND driver_number = $2
+      AND timestamp IS NOT NULL
+      ORDER BY lap_number ASC
     `, [req.params.sessionId, req.params.driverNumber]);
+
+    // Format timestamps and validate data
+    const formattedRows = result.rows.map(row => ({
+      ...row,
+      timestamp: Number(row.timestamp),
+      sector_1_time: row.sector_1_time ? Number(row.sector_1_time) : null,
+      sector_2_time: row.sector_2_time ? Number(row.sector_2_time) : null,
+      sector_3_time: row.sector_3_time ? Number(row.sector_3_time) : null,
+      lap_time: row.lap_time ? Number(row.lap_time) : null,
+      gap_to_leader: row.gap_to_leader ? Number(row.gap_to_leader) : null,
+    }));
+
     client.release();
-    res.json(result.rows);
+    res.json(formattedRows);
   } catch (error) {
     console.error('Error fetching timing data from database:', error);
     res.status(500).json({ error: 'Failed to fetch timing data' });

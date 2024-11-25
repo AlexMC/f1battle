@@ -246,6 +246,7 @@ export const useF1Data = () => {
     let isMounted = true;
 
     const fetchTimingData = async () => {
+      if (!selectedSession || !selectedDrivers.driver1 || !selectedDrivers.driver2) return;
       setIsLoading(true);
 
       if (selectedSession.status === 'completed') {
@@ -257,15 +258,36 @@ export const useF1Data = () => {
           selectedSession.session_id,
           selectedDrivers.driver2!
         );
-        
-        const cachedDriver1 = await redisCacheUtils.get<TimingData[]>(driver1CacheKey);
-        const cachedDriver2 = await redisCacheUtils.get<TimingData[]>(driver2CacheKey);
-        
-        try {
-          let driver1Data = cachedDriver1;
-          let driver2Data = cachedDriver2;
 
-          if (!cachedDriver1) {
+        try {
+          let driver1Data: TimingData[] | null = null;
+          let driver2Data: TimingData[] | null = null;
+
+          // Try database first
+          try {
+            const [dbDriver1Response, dbDriver2Response] = await Promise.all([
+              fetch(`/db/timing/${selectedSession.session_id}/${selectedDrivers.driver1}`),
+              fetch(`/db/timing/${selectedSession.session_id}/${selectedDrivers.driver2}`)
+            ]);
+
+            if (dbDriver1Response.ok && dbDriver2Response.ok) {
+              driver1Data = await dbDriver1Response.json();
+              driver2Data = await dbDriver2Response.json();
+            }
+          } catch (error) {
+            console.log('Database fetch failed, trying cache...');
+          }
+
+          // If not in DB, try cache
+          if (!driver1Data) {
+            driver1Data = await redisCacheUtils.get<TimingData[]>(driver1CacheKey);
+          }
+          if (!driver2Data) {
+            driver2Data = await redisCacheUtils.get<TimingData[]>(driver2CacheKey);
+          }
+
+          // If not in cache, fetch from API
+          if (!driver1Data) {
             const rawDriver1Data = await apiQueue.enqueue(
               `/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver1}`
             );
@@ -276,7 +298,7 @@ export const useF1Data = () => {
             }
           }
 
-          if (!cachedDriver2) {
+          if (!driver2Data) {
             const rawDriver2Data = await apiQueue.enqueue(
               `/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver2}`
             );
