@@ -29,16 +29,45 @@ async function fetchDataInChunks(
   dataType: 'car' | 'location'
 ) {
   // Get timing data to determine actual session time range
-  const timingData = await apiQueue.enqueue<any[]>(
-    `${API_BASE_URL}/laps?session_key=${sessionId}&driver_number=${driverNumber}`
-  );
+  let timingData: any[] = [];
+  try {
+    timingData = await apiQueue.enqueue<any[]>(
+      `${API_BASE_URL}/laps?session_key=${sessionId}&driver_number=${driverNumber}`
+    );
+  } catch (error) {
+    console.log(`[Warning] No timing data available for driver ${driverNumber}`);
+  }
 
   if (timingData.length === 0) {
-    console.log('No timing data available for time range calculation');
+    console.log(`Using small time window around session start for driver ${driverNumber}`);
+    // Use a 5-minute window around session start
+    const startTime = new Date(sessionStartTime);
+    startTime.setMinutes(startTime.getMinutes() - 2);
+    
+    const endTime = new Date(sessionStartTime);
+    endTime.setMinutes(endTime.getMinutes() + 3);
+
+    try {
+      const startISO = startTime.toISOString();
+      const endISO = endTime.toISOString();
+      const endpoint = dataType === 'car' ? 'car_data' : 'location';
+
+      console.log(`[DNF Driver ${driverNumber}] Fetching ${dataType} data in single chunk...`);
+      const data = await apiQueue.enqueue<any[]>(
+        `${API_BASE_URL}/${endpoint}?session_key=${sessionId}&driver_number=${driverNumber}&date>${startISO}&date<${endISO}`
+      );
+
+      if (data.length > 0) {
+        console.log(`[DNF Driver ${driverNumber}] Received ${data.length} points`);
+        return data;
+      }
+    } catch (error) {
+      console.log(`[DNF Driver ${driverNumber}] No ${dataType} data available in session start window`);
+    }
     return [];
   }
 
-  // Sort timing data by timestamp
+  // Rest of the original function for drivers with timing data
   const sortedTimingData = [...timingData].sort((a, b) => 
     new Date(a.date_start).getTime() - new Date(b.date_start).getTime()
   );
@@ -221,11 +250,25 @@ async function fetchAndStoreSession(sessionId: number) {
       // 3. Timing data
       currentOperation = `Fetching timing data for driver ${driver.driver_number}`;
       console.log(`[API Request] ${currentOperation}`);
-      const timingData = await apiQueue.enqueue<any[]>(
-        `${API_BASE_URL}/laps?session_key=${sessionId}&driver_number=${driver.driver_number}`
-      );
-      console.log(`[API Response] Timing data received, laps: ${timingData.length}`);
-
+      let timingData: any[] = [];
+      try {
+        timingData = await apiQueue.enqueue<any[]>(
+          `${API_BASE_URL}/laps?session_key=${sessionId}&driver_number=${driver.driver_number}`
+        );
+        console.log(`[API Response] Timing data received, laps: ${timingData.length}`);
+      } catch (error) {
+        console.log(`[Warning] No timing data available for driver ${driver.driver_number}, likely DNF before completing any laps`);
+        // Create a single "virtual" lap entry for DNF drivers
+        timingData = [{
+          lap_number: 0,
+          duration_sector_1: null,
+          duration_sector_2: null,
+          duration_sector_3: null,
+          lap_duration: null,
+          gap_to_leader: null,
+          date_start: sessionInfo.date_start
+        }];
+      }
 
       for (const lap of timingData) {
         await client.query(
@@ -276,78 +319,89 @@ async function fetchAndStoreSession(sessionId: number) {
       // 4. Position data
       currentOperation = `Fetching position data for driver ${driver.driver_number}`;
       console.log(`[API Request] ${currentOperation}`);
-      const positionData = await apiQueue.enqueue<ApiPositionResponse[]>(
-        `${API_BASE_URL}/position?session_key=${sessionId}&driver_number=${driver.driver_number}`
-      );
-      console.log(`[API Response] Position data received, points: ${positionData.length}`);
-
-
-      for (const pos of positionData) {
-        await client.query(
-          `INSERT INTO position_data (
-            session_id, driver_number, position, timestamp
-          ) VALUES ($1, $2, $3, $4)`,
-          [sessionId, driver.driver_number, pos.position, pos.date]
+      try {
+        const positionData = await apiQueue.enqueue<ApiPositionResponse[]>(
+          `${API_BASE_URL}/position?session_key=${sessionId}&driver_number=${driver.driver_number}`
         );
+        console.log(`[API Response] Position data received, points: ${positionData.length}`);
+
+        for (const pos of positionData) {
+          await client.query(
+            `INSERT INTO position_data (
+              session_id, driver_number, position, timestamp
+            ) VALUES ($1, $2, $3, $4)`,
+            [sessionId, driver.driver_number, pos.position, pos.date]
+          );
+        }
+      } catch (error) {
+        console.log(`[Warning] No position data available for driver ${driver.driver_number}`);
       }
 
       // 5. Car data
       currentOperation = `Fetching car data for driver ${driver.driver_number}`;
       console.log(`[API Request] ${currentOperation} in chunks`);
-      const carData = await fetchDataInChunks(
-        sessionId,
-        driver.driver_number,
-        new Date(sessionInfo.date_start),
-        'car'
-      );
-      console.log(`[API Response] Car data received, total points: ${carData.length}`);
-
-      for (const data of carData) {
-        await client.query(
-          `INSERT INTO car_data (
-            session_id, driver_number, speed, throttle, brake, 
-            gear, rpm, timestamp
-          ) VALUES ($1, $2, $3, $4, $5, CAST($6 AS INTEGER), $7, $8)
-          ON CONFLICT (session_id, driver_number, timestamp) DO NOTHING`,
-          [
-            sessionId,
-            driver.driver_number,
-            data.speed,
-            data.throttle,
-            data.brake,
-            parseInt(data.n_gear) || 0,
-            data.rpm,
-            data.date
-          ]
+      try {
+        const carData = await fetchDataInChunks(
+          sessionId,
+          driver.driver_number,
+          new Date(sessionInfo.date_start),
+          'car'
         );
+        console.log(`[API Response] Car data received, total points: ${carData.length}`);
+
+        for (const data of carData) {
+          await client.query(
+            `INSERT INTO car_data (
+              session_id, driver_number, speed, throttle, brake, 
+              gear, rpm, timestamp
+            ) VALUES ($1, $2, $3, $4, $5, CAST($6 AS INTEGER), $7, $8)
+            ON CONFLICT (session_id, driver_number, timestamp) DO NOTHING`,
+            [
+              sessionId,
+              driver.driver_number,
+              data.speed,
+              data.throttle,
+              data.brake,
+              parseInt(data.n_gear) || 0,
+              data.rpm,
+              data.date
+            ]
+          );
+        }
+      } catch (error) {
+        console.log(`[Warning] No car data available for driver ${driver.driver_number}`);
       }
 
       // 6. Location data
       currentOperation = `Fetching location data for driver ${driver.driver_number}`;
       console.log(`[API Request] ${currentOperation} in chunks`);
-      const locationData = await fetchDataInChunks(
-        sessionId,
-        driver.driver_number,
-        new Date(sessionInfo.date_start),
-        'location'
-      );
-      console.log(`[API Response] Location data received, total points: ${locationData.length}`);
-
-      for (const loc of locationData) {
-        await client.query(
-          `INSERT INTO location_data (
-            session_id, driver_number, x, y, z, timestamp
-          ) VALUES ($1, $2, $3, $4, $5, $6)
-          ON CONFLICT (session_id, driver_number, timestamp) DO NOTHING`,
-          [
-            sessionId,
-            driver.driver_number,
-            loc.x,
-            loc.y,
-            loc.z,
-            loc.date
-          ]
+      try {
+        const locationData = await fetchDataInChunks(
+          sessionId,
+          driver.driver_number,
+          new Date(sessionInfo.date_start),
+          'location'
         );
+        console.log(`[API Response] Location data received, total points: ${locationData.length}`);
+
+        for (const loc of locationData) {
+          await client.query(
+            `INSERT INTO location_data (
+              session_id, driver_number, x, y, z, timestamp
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (session_id, driver_number, timestamp) DO NOTHING`,
+            [
+              sessionId,
+              driver.driver_number,
+              loc.x,
+              loc.y,
+              loc.z,
+              loc.date
+            ]
+          );
+        }
+      } catch (error) {
+        console.log(`[Warning] No location data available for driver ${driver.driver_number}`);
       }
 
       // 7. Team Radio data
