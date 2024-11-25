@@ -236,14 +236,36 @@ async function fetchAndStoreSession(sessionId: number) {
 
     for (const driver of drivers) {
       await client.query(
-        `INSERT INTO drivers (driver_number, driver_name, team_name, session_id)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (driver_number, session_id) DO NOTHING`,
+        `INSERT INTO drivers (
+          driver_number, full_name, team_name, session_id,
+          broadcast_name, country_code, first_name, last_name,
+          headshot_url, name_acronym, meeting_key, team_colour
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ON CONFLICT (driver_number, session_id) 
+        DO UPDATE SET
+          full_name = $2,
+          team_name = $3,
+          broadcast_name = $5,
+          country_code = $6,
+          first_name = $7,
+          last_name = $8,
+          headshot_url = $9,
+          name_acronym = $10,
+          meeting_key = $11,
+          team_colour = $12`,
         [
           driver.driver_number,
           driver.full_name || 'Unknown Driver',
           driver.team_name || 'Unknown Team',
-          sessionId
+          sessionId,
+          driver.broadcast_name || driver.full_name || 'Unknown Driver',
+          driver.country_code || null,
+          driver.first_name || null,
+          driver.last_name || null,
+          driver.headshot_url || null,
+          driver.name_acronym || null,
+          driver.meeting_key || null,
+          driver.team_colour || null
         ]
       );
 

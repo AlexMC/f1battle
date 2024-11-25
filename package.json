@@ -11,7 +11,8 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "migrate": "node src/scripts/migrate.js",
-    "scrape": "node --loader ts-node/esm src/scripts/scrapeF1Data.ts"
+    "scrape": "node --loader ts-node/esm src/scripts/scrapeF1Data.ts",
+    "scrape-endpoint": "node --loader ts-node/esm src/scripts/scrapeEndpoint.ts"
   },
   "dependencies": {
     "@types/ioredis": "^5.0.0",
