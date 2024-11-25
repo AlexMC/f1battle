@@ -2,7 +2,13 @@ import express, { Request, Response, RequestHandler } from 'express';
 import cors from 'cors';
 import Redis from 'ioredis';
 import compression from 'compression';
+import pkg from 'pg';
+import dotenv from 'dotenv';
 
+// Load environment variables before creating the pool
+dotenv.config();
+
+const { Pool } = pkg;
 const app = express();
 const port = 3001;
 
@@ -69,10 +75,91 @@ const clearCacheHandler: RequestHandler<CacheParams> = async (req, res): Promise
   }
 };
 
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined
+});
+
+// Test database connection
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error('Error connecting to the database:', err);
+  } else {
+    console.log('Successfully connected to database');
+    release();
+  }
+});
+
 app.post('/cache', setCacheHandler);
 app.get('/cache/:key', getCacheHandler);
 app.delete('/cache/:key', clearCacheHandler);
 
+app.get('/db/sessions', async (req: Request, res: Response) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT * FROM sessions 
+      WHERE year = 2024 
+      ORDER BY date DESC
+    `);
+    client.release();
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching sessions from database:', error);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+app.get('/db/drivers/:sessionId', async (req: Request, res: Response) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT 
+        d.driver_number,
+        d.driver_name as full_name,
+        d.team_name
+      FROM drivers d
+      WHERE d.session_id = $1
+      ORDER BY d.driver_number
+    `, [req.params.sessionId]);
+    client.release();
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching drivers from database:', error);
+    res.status(500).json({ error: 'Failed to fetch drivers' });
+  }
+});
+
+app.get('/db/timing/:sessionId/:driverNumber', async (req: Request, res: Response) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT 
+        session_id,
+        driver_number,
+        lap_number,
+        sector_1_time,
+        sector_2_time,
+        sector_3_time,
+        lap_time,
+        gap_to_leader,
+        timestamp
+      FROM timing_data
+      WHERE session_id = $1 AND driver_number = $2
+      ORDER BY lap_number
+    `, [req.params.sessionId, req.params.driverNumber]);
+    client.release();
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching timing data from database:', error);
+    res.status(500).json({ error: 'Failed to fetch timing data' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Cache server running on port ${port}`);
+});
+
+process.on('exit', () => {
+  pool.end();
 }); 

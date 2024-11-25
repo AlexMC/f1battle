@@ -75,7 +75,25 @@ export const useF1Data = () => {
       if (has2024Data) return;
       
       try {
-        // Try to get from cache first
+        // Try database first
+        const dbResponse = await fetch('/db/sessions');
+        if (dbResponse.ok) {
+          const dbSessions = await dbResponse.json();
+          if (dbSessions.length > 0) {
+            setSessions(prev => {
+              const uniqueSessions = [...prev, ...dbSessions]
+                .filter((session, index, self) => 
+                  index === self.findIndex((s) => s.session_id === session.session_id)
+                )
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              return uniqueSessions;
+            });
+            setHas2024Data(true);
+            return;
+          }
+        }
+
+        // Fallback to API if database is empty or fails
         const cachedSessions = await redisCacheUtils.get<Session[]>(CACHE_KEYS.SESSIONS_2024);
         if (cachedSessions) {
           setSessions(prev => {
