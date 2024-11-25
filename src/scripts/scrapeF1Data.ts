@@ -159,36 +159,6 @@ async function fetchDataInChunks(
   return allData;
 }
 
-async function fetchFullDataForComparison(
-  sessionId: number,
-  driverNumber: number,
-  sessionStartTime: Date,
-  dataType: 'car' | 'location'
-) {
-  const endpoint = dataType === 'car' ? 'car_data' : 'location';
-  console.log(`[Full Data] Fetching all ${dataType} data...`);
-  
-  const data = await apiQueue.enqueue<any[]>(
-    `${API_BASE_URL}/${endpoint}?session_key=${sessionId}&driver_number=${driverNumber}`
-  );
-  
-  console.log(`[Full Data] Received ${data.length} total points`);
-  
-  // Log timestamp range
-  if (data.length > 0) {
-    const dates = data.map(d => new Date(d.date).getTime());
-    const minDate = new Date(Math.min(...dates));
-    const maxDate = new Date(Math.max(...dates));
-    console.log('[Full Data] Time range:', {
-      start: minDate.toISOString(),
-      end: maxDate.toISOString(),
-      durationMinutes: (maxDate.getTime() - minDate.getTime()) / (60 * 1000)
-    });
-  }
-  
-  return data;
-}
-
 async function fetchAndStoreSession(sessionId: number) {
   const client = await pool.connect();
   let currentOperation = 'Starting transaction';
@@ -465,7 +435,12 @@ async function fetchAndStoreSession(sessionId: number) {
 async function getProcessedSessions(): Promise<number[]> {
   const client = await pool.connect();
   try {
-    const result = await client.query('SELECT session_id FROM sessions');
+    const result = await client.query(`
+      SELECT DISTINCT s.session_id 
+      FROM sessions s
+      INNER JOIN timing_data td ON s.session_id = td.session_id
+      WHERE td.lap_number > 0
+    `);
     return result.rows.map(row => row.session_id);
   } finally {
     client.release();
