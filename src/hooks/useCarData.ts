@@ -30,6 +30,21 @@ export const useCarData = (
       try {
         const startISO = startTime.toISOString();
         const endISO = endTime.toISOString();
+
+        // Try database first
+        try {
+          const dbResponse = await fetch(
+            `/db/car_data/${sessionId}/${driverNumber}?start=${startISO}&end=${endISO}`
+          );
+          if (dbResponse.ok) {
+            const dbData = await dbResponse.json();
+            if (dbData.length > 0) {
+              return dbData;
+            }
+          }
+        } catch (error) {
+          console.log('Database fetch failed, trying API...');
+        }
         
         return await apiQueue.enqueue<CarData[]>(
           `/api/car_data?session_key=${sessionId}&driver_number=${driverNumber}&date>${startISO}&date<${endISO}`

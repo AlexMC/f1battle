@@ -1,0 +1,2 @@
+ALTER TABLE car_data 
+ADD COLUMN drs INTEGER;

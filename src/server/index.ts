@@ -238,6 +238,98 @@ app.get('/db/radio/:sessionId/:driverNumber', async (req: Request, res: Response
   }
 });
 
+app.get('/db/car_data/:sessionId/:driverNumber', async (req: Request, res: Response) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT 
+        session_id,
+        driver_number,
+        rpm,
+        speed,
+        gear,
+        throttle,
+        brake,
+        drs,
+        EXTRACT(EPOCH FROM timestamp) * 1000 as timestamp
+      FROM car_data 
+      WHERE session_id = $1 
+      AND driver_number = $2
+      AND timestamp >= $3
+      AND timestamp <= $4
+      AND timestamp IS NOT NULL
+      ORDER BY timestamp ASC
+    `, [
+      req.params.sessionId, 
+      req.params.driverNumber,
+      req.query.start,
+      req.query.end
+    ]);
+
+    const formattedRows = result.rows.map(row => ({
+      session_id: Number(row.session_id),
+      driver_number: Number(row.driver_number),
+      rpm: Number(row.rpm),
+      speed: Number(row.speed),
+      gear: Number(row.gear),
+      throttle: Number(row.throttle),
+      brake: Number(row.brake),
+      drs: Number(row.drs),
+      timestamp: Number(row.timestamp),
+      date: new Date(Number(row.timestamp)).toISOString()
+    }));
+
+    client.release();
+    res.json(formattedRows);
+  } catch (error) {
+    console.error('Error fetching car data from database:', error);
+    res.status(500).json({ error: 'Failed to fetch car data' });
+  }
+});
+
+app.get('/db/location/:sessionId/:driverNumber', async (req: Request, res: Response) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT 
+        session_id,
+        driver_number,
+        x,
+        y,
+        z,
+        EXTRACT(EPOCH FROM timestamp) * 1000 as timestamp
+      FROM location_data 
+      WHERE session_id = $1 
+      AND driver_number = $2
+      AND timestamp >= $3
+      AND timestamp <= $4
+      AND timestamp IS NOT NULL
+      ORDER BY timestamp ASC
+    `, [
+      req.params.sessionId, 
+      req.params.driverNumber,
+      req.query.start,
+      req.query.end
+    ]);
+
+    const formattedRows = result.rows.map(row => ({
+      session_id: Number(row.session_id),
+      driver_number: Number(row.driver_number),
+      x: Number(row.x),
+      y: Number(row.y),
+      z: Number(row.z),
+      timestamp: Number(row.timestamp),
+      date: new Date(Number(row.timestamp)).toISOString()
+    }));
+
+    client.release();
+    res.json(formattedRows);
+  } catch (error) {
+    console.error('Error fetching location data from database:', error);
+    res.status(500).json({ error: 'Failed to fetch location data' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Cache server running on port ${port}`);
 });

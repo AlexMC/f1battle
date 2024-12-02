@@ -22,7 +22,7 @@ const CHUNK_SIZE_MINUTES = 15;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
-async function fetchDataInChunks(
+export async function fetchDataInChunks(
   sessionId: number,
   driverNumber: number,
   sessionStartTime: Date,
@@ -311,22 +311,30 @@ async function fetchAndStoreSession(sessionId: number) {
       // 4. Position data
       currentOperation = `Fetching position data for driver ${driver.driver_number}`;
       console.log(`[API Request] ${currentOperation}`);
+      let positionData: ApiPositionResponse[] = [];
       try {
-        const positionData = await apiQueue.enqueue<ApiPositionResponse[]>(
+        positionData = await apiQueue.enqueue<ApiPositionResponse[]>(
           `${API_BASE_URL}/position?session_key=${sessionId}&driver_number=${driver.driver_number}`
         );
         console.log(`[API Response] Position data received, points: ${positionData.length}`);
-
-        for (const pos of positionData) {
-          await client.query(
-            `INSERT INTO position_data (
-              session_id, driver_number, position, timestamp
-            ) VALUES ($1, $2, $3, $4)`,
-            [sessionId, driver.driver_number, pos.position, pos.date]
-          );
-        }
       } catch (error) {
         console.log(`[Warning] No position data available for driver ${driver.driver_number}`);
+        // Create a single "virtual" position entry for drivers with no data
+        positionData = [{
+          position: 0,
+          date: sessionInfo.date_start,
+          driver_number: driver.driver_number
+        }];
+      }
+
+      for (const pos of positionData) {
+        await client.query(
+          `INSERT INTO position_data (
+            session_id, driver_number, position, timestamp
+          ) VALUES ($1, $2, $3, $4)
+          ON CONFLICT (session_id, driver_number, timestamp) DO NOTHING`,
+          [sessionId, driver.driver_number, pos.position || null, pos.date]
+        );
       }
 
       // 5. Car data
@@ -345,8 +353,8 @@ async function fetchAndStoreSession(sessionId: number) {
           await client.query(
             `INSERT INTO car_data (
               session_id, driver_number, speed, throttle, brake, 
-              gear, rpm, timestamp
-            ) VALUES ($1, $2, $3, $4, $5, CAST($6 AS INTEGER), $7, $8)
+              gear, rpm, drs, timestamp
+            ) VALUES ($1, $2, $3, $4, $5, CAST($6 AS INTEGER), $7, $8, $9)
             ON CONFLICT (session_id, driver_number, timestamp) DO NOTHING`,
             [
               sessionId,
@@ -356,6 +364,7 @@ async function fetchAndStoreSession(sessionId: number) {
               data.brake,
               parseInt(data.n_gear) || 0,
               data.rpm,
+              data.drs,
               data.date
             ]
           );
@@ -449,26 +458,49 @@ async function getProcessedSessions(): Promise<number[]> {
 
 async function main() {
   try {
-    const processedSessions = await getProcessedSessions();
-    console.log('Already processed sessions:', processedSessions);
+    // Get session ID from command line arguments
+    const sessionId = process.argv[2] ? parseInt(process.argv[2]) : null;
+    
+    if (sessionId) {
+      // Process specific session
+      console.log(`Fetching session info for ${sessionId}...`);
+      const sessionData = await apiQueue.enqueue<any[]>(
+        `${API_BASE_URL}/sessions?session_key=${sessionId}`
+      );
 
-    // Fetch all 2024 sessions
-    console.log('Fetching 2024 sessions list...');
-    const sessions = await apiQueue.enqueue<any[]>(`${API_BASE_URL}/sessions?year=2024`);
-    console.log(`Found ${sessions.length} sessions for 2024`);
-    
-    // Process only the first unprocessed session
-    const nextSession = sessions.find(session => !processedSessions.includes(session.session_key));
-    
-    if (!nextSession) {
-      console.log('All sessions have been processed');
-      return;
+      if (sessionData.length === 0) {
+        console.log(`Session ${sessionId} not found`);
+        return;
+      }
+
+      console.log(`Processing session: ${sessionId} (${sessionData[0].session_name})`);
+      await fetchAndStoreSession(sessionId);
+      console.log('Session processed successfully');
+    } else {
+      // Process missing sessions
+      const processedSessions = await getProcessedSessions();
+      console.log('Already processed sessions:', processedSessions);
+
+      // Fetch all 2024 sessions
+      console.log('Fetching 2024 sessions list...');
+      const sessions = await apiQueue.enqueue<any[]>(`${API_BASE_URL}/sessions?year=2024`);
+      console.log(`Found ${sessions.length} sessions for 2024`);
+      
+      // Process only the first unprocessed session that isn't 9627
+      const nextSession = sessions.find(session => 
+        !processedSessions.includes(session.session_key) && 
+        session.session_key !== 9627
+      );
+      
+      if (!nextSession) {
+        console.log('All sessions have been processed');
+        return;
+      }
+
+      console.log(`Processing session: ${nextSession.session_key} (${nextSession.session_name})`);
+      await fetchAndStoreSession(nextSession.session_key);
+      console.log('Session processed successfully');
     }
-
-    console.log(`Processing session: ${nextSession.session_key} (${nextSession.session_name})`);
-    await fetchAndStoreSession(nextSession.session_key);
-    console.log('Session processed successfully');
-
   } catch (error) {
     console.error('Error during data scraping:', error);
   } finally {
