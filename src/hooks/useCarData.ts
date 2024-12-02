@@ -33,19 +33,27 @@ export const useCarData = (
 
         // Try database first
         try {
-          const dbResponse = await fetch(
-            `/db/car_data/${sessionId}/${driverNumber}?start=${startISO}&end=${endISO}`
-          );
+          const dbUrl = `/db/car_data/${sessionId}/${driverNumber}?start=${startISO}&end=${endISO}`;
+          // console.log('[Debug] Trying database:', dbUrl);
+          const dbResponse = await fetch(dbUrl);
+          // console.log('[Debug] Database response status:', dbResponse.status);
           if (dbResponse.ok) {
             const dbData = await dbResponse.json();
+            // console.log('[Debug] Database data length:', dbData.length);
             if (dbData.length > 0) {
+              // console.log('[Debug] Using database data');
               return dbData;
+            }
+            if (dbData.length === 0) {
+              // console.log('[Debug] No more data available for this time range');
+              return [];
             }
           }
         } catch (error) {
-          console.log('Database fetch failed, trying API...');
+          console.log('[Debug] Database fetch error:', error);
         }
         
+        console.log('[Debug] Falling back to API');
         return await apiQueue.enqueue<CarData[]>(
           `/api/car_data?session_key=${sessionId}&driver_number=${driverNumber}&date>${startISO}&date<${endISO}`
         );

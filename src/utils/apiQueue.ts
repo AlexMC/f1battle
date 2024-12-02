@@ -12,6 +12,10 @@ class ApiQueue {
   private readonly MAX_REQUESTS_PER_SECOND = 3;
   private readonly DELAY_BETWEEN_REQUESTS = 400;
 
+  private isOpenF1Request(url: string): boolean {
+    return url.startsWith('/api/') && !url.includes('/db/') && !url.includes('/redis/');
+  }
+
   async enqueue<T>(url: string): Promise<T> {
     return new Promise((resolve, reject) => {
       this.queue.push({ 
@@ -45,10 +49,26 @@ class ApiQueue {
 
       try {
         await new Promise(resolve => setTimeout(resolve, this.DELAY_BETWEEN_REQUESTS));
-        const response = await fetch(request.url);
-        const data = await response.json();
+        let response: Response;
+        let data: any;
+        
+        if (this.isOpenF1Request(request.url)) {
+          console.log(`[OpenF1 API Request] ${request.url}`);
+          const startTime = Date.now();
+          response = await fetch(request.url);
+          data = await response.json();
+          const duration = Date.now() - startTime;
+          console.log(`[OpenF1 API Response] ${request.url} - Status: ${response.status}, Duration: ${duration}ms, Data Length: ${Array.isArray(data) ? data.length : 1}`);
+        } else {
+          response = await fetch(request.url);
+          data = await response.json();
+        }
+        
         request.resolve(data);
       } catch (error) {
+        if (this.isOpenF1Request(request.url)) {
+          console.error(`[OpenF1 API Error] ${request.url} -`, error);
+        }
         request.reject(error);
       }
     }

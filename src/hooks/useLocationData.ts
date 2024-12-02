@@ -32,19 +32,29 @@ export const useLocationData = (
         
         // Try database first
         try {
-          const dbResponse = await fetch(
-            `/db/location/${sessionId}/${driverNumber}?start=${startISO}&end=${endISO}`
-          );
+          const dbUrl = `/db/location/${sessionId}/${driverNumber}?start=${startISO}&end=${endISO}`;
+          // console.log('[Debug] Trying database:', dbUrl);
+          const dbResponse = await fetch(dbUrl);
+          // console.log('[Debug] Database response status:', dbResponse.status);
           if (dbResponse.ok) {
             const dbData = await dbResponse.json();
+            // console.log('[Debug] Database data length:', dbData.length);
             if (dbData.length > 0) {
+              // console.log('[Debug] Using database data');
               return dbData;
+            }
+            // If we got an empty array from the database and the previous chunk had data,
+            // we've likely reached the end of the session data
+            if (dbData.length === 0) {
+              // console.log('[Debug] No more data available for this time range');
+              return [];
             }
           }
         } catch (error) {
-          console.log('Database fetch failed, trying API...');
+          console.log('[Debug] Database fetch error:', error);
         }
         
+        console.log('[Debug] Falling back to API');
         return await apiQueue.enqueue<LocationData[]>(
           `/api/location?session_key=${sessionId}&driver_number=${driverNumber}&date>${startISO}&date<${endISO}`
         );
