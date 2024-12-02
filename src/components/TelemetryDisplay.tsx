@@ -30,7 +30,7 @@ export const TelemetryDisplay: React.FC<Props> = ({ data, isLoading }) => {
       
       <div className="bg-gray-700 rounded-lg p-4">
         <div className="text-gray-400 text-sm">Gear</div>
-        <div className="text-2xl font-bold">{data.n_gear === 0 ? 'N' : data.n_gear}</div>
+        <div className="text-2xl font-bold">{data.gear === 0 ? 'N' : data.gear}</div>
       </div>
       
       <div className="bg-gray-700 rounded-lg p-4">
@@ -72,7 +72,7 @@ export const TelemetryDisplay: React.FC<Props> = ({ data, isLoading }) => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-gray-700 rounded-lg p-4">
           <div className="text-gray-400 text-sm">Gear</div>
-          <div className="text-2xl font-bold">{data.n_gear === 0 ? 'N' : data.n_gear}</div>
+          <div className="text-2xl font-bold">{data.gear === 0 ? 'N' : data.gear}</div>
         </div>
         
         <div className="bg-gray-700 rounded-lg p-4">
