@@ -75,7 +75,25 @@ export const useF1Data = () => {
       if (has2024Data) return;
       
       try {
-        // Try to get from cache first
+        // Try database first
+        const dbResponse = await fetch('/db/sessions');
+        if (dbResponse.ok) {
+          const dbSessions = await dbResponse.json();
+          if (dbSessions.length > 0) {
+            setSessions(prev => {
+              const uniqueSessions = [...prev, ...dbSessions]
+                .filter((session, index, self) => 
+                  index === self.findIndex((s) => s.session_id === session.session_id)
+                )
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              return uniqueSessions;
+            });
+            setHas2024Data(true);
+            return;
+          }
+        }
+
+        // Fallback to API if database is empty or fails
         const cachedSessions = await redisCacheUtils.get<Session[]>(CACHE_KEYS.SESSIONS_2024);
         if (cachedSessions) {
           setSessions(prev => {
@@ -186,16 +204,27 @@ export const useF1Data = () => {
     if (!selectedSession) return;
 
     const fetchDrivers = async () => {
-      // Try to get from cache first
-      const cacheKey = CACHE_KEYS.DRIVERS(selectedSession.session_id);
-      const cachedDrivers = await redisCacheUtils.get<Driver[]>(cacheKey);
-      
-      if (cachedDrivers) {
-        setDrivers(cachedDrivers);
-        return;
-      }
-
       try {
+        // Try database first
+        const dbResponse = await fetch(`/db/drivers/${selectedSession.session_id}`);
+        if (dbResponse.ok) {
+          const dbDrivers = await dbResponse.json();
+          if (dbDrivers.length > 0) {
+            setDrivers(dbDrivers);
+            return;
+          }
+        }
+
+        // If not in DB, try cache
+        const cacheKey = CACHE_KEYS.DRIVERS(selectedSession.session_id);
+        const cachedDrivers = await redisCacheUtils.get<Driver[]>(cacheKey);
+        
+        if (cachedDrivers) {
+          setDrivers(cachedDrivers);
+          return;
+        }
+
+        // If not in cache, fetch from API
         const driversData = await apiQueue.enqueue<ApiDriverResponse[]>(
           `https://api.openf1.org/v1/drivers?session_key=${selectedSession.session_id}`
         );
@@ -228,6 +257,7 @@ export const useF1Data = () => {
     let isMounted = true;
 
     const fetchTimingData = async () => {
+      if (!selectedSession || !selectedDrivers.driver1 || !selectedDrivers.driver2) return;
       setIsLoading(true);
 
       if (selectedSession.status === 'completed') {
@@ -239,15 +269,36 @@ export const useF1Data = () => {
           selectedSession.session_id,
           selectedDrivers.driver2!
         );
-        
-        const cachedDriver1 = await redisCacheUtils.get<TimingData[]>(driver1CacheKey);
-        const cachedDriver2 = await redisCacheUtils.get<TimingData[]>(driver2CacheKey);
-        
-        try {
-          let driver1Data = cachedDriver1;
-          let driver2Data = cachedDriver2;
 
-          if (!cachedDriver1) {
+        try {
+          let driver1Data: TimingData[] | null = null;
+          let driver2Data: TimingData[] | null = null;
+
+          // Try database first
+          try {
+            const [dbDriver1Response, dbDriver2Response] = await Promise.all([
+              fetch(`/db/timing/${selectedSession.session_id}/${selectedDrivers.driver1}`),
+              fetch(`/db/timing/${selectedSession.session_id}/${selectedDrivers.driver2}`)
+            ]);
+
+            if (dbDriver1Response.ok && dbDriver2Response.ok) {
+              driver1Data = await dbDriver1Response.json();
+              driver2Data = await dbDriver2Response.json();
+            }
+          } catch (error) {
+            console.log('Database fetch failed, trying cache...');
+          }
+
+          // If not in DB, try cache
+          if (!driver1Data) {
+            driver1Data = await redisCacheUtils.get<TimingData[]>(driver1CacheKey);
+          }
+          if (!driver2Data) {
+            driver2Data = await redisCacheUtils.get<TimingData[]>(driver2CacheKey);
+          }
+
+          // If not in cache, fetch from API
+          if (!driver1Data) {
             const rawDriver1Data = await apiQueue.enqueue(
               `/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver1}`
             );
@@ -258,7 +309,7 @@ export const useF1Data = () => {
             }
           }
 
-          if (!cachedDriver2) {
+          if (!driver2Data) {
             const rawDriver2Data = await apiQueue.enqueue(
               `/api/laps?session_key=${selectedSession.session_id}&driver_number=${selectedDrivers.driver2}`
             );
@@ -336,46 +387,60 @@ export const useF1Data = () => {
     setSelectedDrivers({ driver1: null, driver2: null });
     
     if (session) {
-      // First check cache
-      const cacheKey = CACHE_KEYS.DRIVERS(session.session_id);
-      const cachedDrivers = await redisCacheUtils.get<Driver[]>(cacheKey);
-      
-      if (cachedDrivers && cachedDrivers.length >= 2) {
-        console.log('Auto-selecting first two drivers from cache:', {
-          driver1: cachedDrivers[0].driver_number,
-          driver2: cachedDrivers[1].driver_number
-        });
-        setSelectedDrivers({
-          driver1: cachedDrivers[0].driver_number,
-          driver2: cachedDrivers[1].driver_number
-        });
-      } else {
-        // If not cached, fetch drivers and then select
-        apiQueue.enqueue<ApiDriverResponse[]>(`/api/drivers?session_key=${session.session_id}`)
-          .then(async data => {
-            const mappedDrivers = data.map(d => ({
-              driver_number: d.driver_number,
-              driver_name: d.driver_name,
-              team_name: d.team_name
-            }));
-            
-            if (mappedDrivers.length >= 2) {
-              console.log('Auto-selecting first two drivers from API:', {
-                driver1: mappedDrivers[0].driver_number,
-                driver2: mappedDrivers[1].driver_number
-              });
-              setSelectedDrivers({
-                driver1: mappedDrivers[0].driver_number,
-                driver2: mappedDrivers[1].driver_number
-              });
-            }
-            
-            // Cache the drivers for future use
-            await redisCacheUtils.set(cacheKey, mappedDrivers, 24 * 60 * 60 * 1000);
-          })
-          .catch(error => {
-            console.error('Error fetching drivers:', error);
+      try {
+        // Try database first
+        const dbResponse = await fetch(`/db/drivers/${session.session_id}`);
+        let drivers: Driver[] = [];
+        
+        if (dbResponse.ok) {
+          drivers = await dbResponse.json();
+        }
+
+        // If not in DB, try cache
+        if (drivers.length === 0) {
+          console.log('No drivers in DB, trying cache...');
+          const cacheKey = CACHE_KEYS.DRIVERS(session.session_id);
+          const cachedDrivers = await redisCacheUtils.get<Driver[]>(cacheKey);
+          if (cachedDrivers) {
+            drivers = cachedDrivers;
+          }
+        }
+
+        // If not in cache, fetch from API
+        if (drivers.length === 0) {
+          console.log('No drivers in cache, fetching from API...');
+          const apiData = await apiQueue.enqueue<ApiDriverResponse[]>(
+            `/api/drivers?session_key=${session.session_id}`
+          );
+          
+          drivers = apiData.map(d => ({
+            driver_number: d.driver_number,
+            full_name: d.full_name,
+            name_acronym: d.name_acronym || '',
+            team_name: d.team_name || '',
+            session_id: session.session_id
+          }));
+
+          // Cache the results if we got them from API
+          if (drivers.length > 0) {
+            const cacheKey = CACHE_KEYS.DRIVERS(session.session_id);
+            await redisCacheUtils.set(cacheKey, drivers, 24 * 60 * 60 * 1000);
+          }
+        }
+
+        // Auto-select first two drivers if available
+        if (drivers.length >= 2) {
+          console.log('Auto-selecting first two drivers:', {
+            driver1: drivers[0].driver_number,
+            driver2: drivers[1].driver_number
           });
+          setSelectedDrivers({
+            driver1: drivers[0].driver_number,
+            driver2: drivers[1].driver_number
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching drivers:', error);
       }
     }
   };

@@ -33,6 +33,23 @@ export const useDriverPosition = ({
       if (!sessionId || !driver) return;
 
       try {
+        // Try database first
+        try {
+          const dbResponse = await fetch(`/db/position/${sessionId}/${driver.driver_number}`);
+          if (dbResponse.ok) {
+            const dbData = await dbResponse.json();
+            if (dbData.length > 0) {
+              setPositionData(dbData);
+              setIsLoading(false);
+              return;
+            }
+          }
+        } catch (error) {
+          console.log('Database fetch failed, trying cache...');
+        }
+
+        // If not in DB, try cache
+        console.log(`Fetching position data from cache for session ${sessionId} and driver ${driver.driver_number}`);
         const cacheKey = CACHE_KEY.positions(sessionId, driver.driver_number);
         const cachedData = await redisCacheUtils.get<PositionData[]>(cacheKey);
         
@@ -42,10 +59,14 @@ export const useDriverPosition = ({
           return;
         }
 
+        // If not in cache, fetch from API
+        console.log(`Fetching position data from API for session ${sessionId} and driver ${driver.driver_number}`);
         const data = await apiQueue.enqueue<ApiPositionResponse[]>(
           `/api/position?session_key=${sessionId}&driver_number=${driver.driver_number}`
         );
         const mappedData = data.map(pos => mapApiPositionToPositionData(pos, sessionId));
+        
+        // Cache the results
         await redisCacheUtils.set(cacheKey, mappedData, 24 * 60 * 60 * 1000);
         
         setPositionData(mappedData);

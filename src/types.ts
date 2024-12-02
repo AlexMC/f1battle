@@ -75,7 +75,7 @@ export interface CarData {
   driver_number: number;
   drs: number;
   meeting_key: number;
-  n_gear: number;
+  gear: number;
   rpm: number;
   session_key: number;
   speed: number;
