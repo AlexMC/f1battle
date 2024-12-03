@@ -290,7 +290,7 @@ app.get('/db/car_data/:sessionId/:driverNumber', async (req: Request, res: Respo
 app.get('/db/location/:sessionId/:driverNumber', async (req: Request, res: Response) => {
   try {
     const client = await pool.connect();
-    const result = await client.query(`
+    let query = `
       SELECT 
         session_id,
         driver_number,
@@ -301,16 +301,20 @@ app.get('/db/location/:sessionId/:driverNumber', async (req: Request, res: Respo
       FROM location_data 
       WHERE session_id = $1 
       AND driver_number = $2
-      AND timestamp >= $3
-      AND timestamp <= $4
       AND timestamp IS NOT NULL
-      ORDER BY timestamp ASC
-    `, [
-      req.params.sessionId, 
-      req.params.driverNumber,
-      req.query.start,
-      req.query.end
-    ]);
+    `;
+
+    const params = [req.params.sessionId, req.params.driverNumber];
+
+    // Add time range filters if provided
+    if (req.query.start && req.query.end) {
+      query += ` AND timestamp >= $3 AND timestamp <= $4`;
+      params.push(req.query.start as string, req.query.end as string);
+    }
+
+    query += ` ORDER BY timestamp ASC`;
+
+    const result = await client.query(query, params);
 
     const formattedRows = result.rows.map(row => ({
       session_id: Number(row.session_id),
@@ -327,6 +331,42 @@ app.get('/db/location/:sessionId/:driverNumber', async (req: Request, res: Respo
   } catch (error) {
     console.error('Error fetching location data from database:', error);
     res.status(500).json({ error: 'Failed to fetch location data' });
+  }
+});
+
+app.get('/db/intervals/:sessionId/:driverNumber', async (req: Request, res: Response) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query(`
+      SELECT 
+        session_id,
+        driver_number,
+        gap_to_leader,
+        interval,
+        EXTRACT(EPOCH FROM timestamp) * 1000 as timestamp
+      FROM interval_data 
+      WHERE session_id = $1 
+      AND driver_number = $2
+      AND timestamp IS NOT NULL
+      ORDER BY timestamp ASC
+    `, [req.params.sessionId, req.params.driverNumber]);
+
+    // Format timestamps and validate data
+    const formattedRows = result.rows.map(row => ({
+      session_key: Number(row.session_id),
+      meeting_key: Math.floor(Number(row.session_id) / 100),
+      driver_number: Number(row.driver_number),
+      gap_to_leader: Number(row.gap_to_leader),
+      interval: Number(row.interval),
+      timestamp: Number(row.timestamp),
+      date: new Date(Number(row.timestamp)).toISOString()
+    }));
+
+    client.release();
+    res.json(formattedRows);
+  } catch (error) {
+    console.error('Error fetching interval data from database:', error);
+    res.status(500).json({ error: 'Failed to fetch interval data' });
   }
 });
 

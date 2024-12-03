@@ -11,14 +11,47 @@ interface TrackScalingFactors {
 const CACHE_KEY = (sessionId: number) => `track_scaling_${sessionId}`;
 
 export const calculateTrackScalingFactors = async (sessionId: number, driverNumber: number): Promise<TrackScalingFactors> => {
+  if (!sessionId || !driverNumber) {
+    console.log('[Debug] Missing sessionId or driverNumber:', { sessionId, driverNumber });
+    throw new Error('Session ID and Driver Number are required');
+  }
+
   // Check cache first
   const cached = await redisCacheUtils.get(CACHE_KEY(sessionId));
-  if (cached) return cached as TrackScalingFactors;
+  if (cached) {
+    console.log('[Debug] Using cached scaling factors');
+    return cached as TrackScalingFactors;
+  }
 
-  // Fetch all locations for the driver
-  const locations = await apiQueue.enqueue<LocationData[]>(
-    `/api/location?session_key=${sessionId}&driver_number=${driverNumber}`
-  );
+  let locations: LocationData[] = [];
+
+  // Try database first
+  try {
+    console.log(`[Debug] Fetching location data from DB for session ${sessionId} and driver ${driverNumber}`);
+    const dbResponse = await fetch(`/db/location/${sessionId}/${driverNumber}`);
+    if (dbResponse.ok) {
+      const dbData = await dbResponse.json();
+      console.log(`[Debug] DB response status: ${dbResponse.status}, data length: ${dbData.length}`);
+      if (dbData.length > 0) {
+        locations = dbData;
+        console.log('[Debug] Using database data for scaling factors');
+      } else {
+        console.log('[Debug] No location data in database');
+      }
+    } else {
+      console.log(`[Debug] DB response not OK: ${dbResponse.status}`);
+    }
+  } catch (error) {
+    console.log('[Debug] Database fetch failed:', error);
+  }
+
+  // If no data in database, fetch from API
+  if (locations.length === 0) {
+    console.log('[Debug] Falling back to API for scaling factors');
+    locations = await apiQueue.enqueue<LocationData[]>(
+      `/api/location?session_key=${sessionId}&driver_number=${driverNumber}`
+    );
+  }
 
   // Filter valid coordinates
   const xValues = locations.map(p => p.x).filter(x => typeof x === 'number' && !isNaN(x));

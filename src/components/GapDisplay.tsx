@@ -2,12 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Driver, IntervalData, PositionData } from '../types';
 import { getTeamColor } from '../utils/colors';
 import { LoadingSpinner } from './LoadingSpinner';
-import { redisCacheUtils } from '../utils/redisCache';
-import { apiQueue } from '../utils/apiQueue';
-import { ApiIntervalResponse, ApiPositionResponse } from '../types/api';
-import { findPositionAtTime } from '../utils/positions';
 import { findDataAtTime } from '../utils/timing';
 import { useDriverPosition } from '../hooks/useDriverPosition';
+import { useIntervalData } from '../hooks/useIntervalData';
 
 interface Props {
   sessionId: number;
@@ -18,13 +15,6 @@ interface Props {
   localTime: Date;
   sessionStartTime: Date;
 }
-
-const CACHE_KEY = {
-  intervals: (sessionId: number, driverNumber: number) =>
-    `f1_intervals_${sessionId}_${driverNumber}`,
-  positions: (sessionId: number, driverNumber: number) =>
-    `f1_positions_${sessionId}_${driverNumber}`
-};
 
 interface GapData {
   gap: number;
@@ -44,9 +34,19 @@ export const GapDisplay: React.FC<Props> = ({
   localTime,
   sessionStartTime
 }) => {
-  const [intervalData, setIntervalData] = useState<{[key: number]: IntervalData[]}>({});
-  const [isLoading, setIsLoading] = useState(true);
   const [currentGap, setCurrentGap] = useState<GapData | null>(null);
+
+  const { intervalData: driver1Intervals, isLoading: isLoadingDriver1 } = useIntervalData({
+    sessionId,
+    driverNumber: driver1.driver_number,
+    isLiveSession
+  });
+
+  const { intervalData: driver2Intervals, isLoading: isLoadingDriver2 } = useIntervalData({
+    sessionId,
+    driverNumber: driver2.driver_number,
+    isLiveSession
+  });
 
   const { currentPosition: driver1CurrentPosition } = useDriverPosition({
     sessionId,
@@ -63,73 +63,8 @@ export const GapDisplay: React.FC<Props> = ({
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const fetchDataForDriver = async <T extends 'intervals' | 'positions'>(
-          driver: Driver, 
-          dataType: T
-        ): Promise<T extends 'intervals' ? IntervalData[] : PositionData[]> => {
-          const cacheKey = CACHE_KEY[dataType](sessionId, driver.driver_number);
-          const cachedData = await redisCacheUtils.get(cacheKey);
-          
-          if (cachedData) return cachedData as any;
-
-          const endpoint = dataType === 'intervals' ? 'intervals' : 'position';
-          const data = await apiQueue.enqueue<ApiIntervalResponse[] | ApiPositionResponse[]>(
-            `/api/${endpoint}?session_key=${sessionId}&driver_number=${driver.driver_number}`
-          );
-          
-          if (!isLiveSession) {
-            await redisCacheUtils.set(cacheKey, data, 24 * 60 * 60 * 1000);
-          }
-          
-          return data as any;
-        };
-
-        const [
-          driver1Intervals,
-          driver2Intervals,
-          driver1Positions,
-          driver2Positions
-        ] = await Promise.all([
-          fetchDataForDriver(driver1, 'intervals'),
-          fetchDataForDriver(driver2, 'intervals'),
-          fetchDataForDriver(driver1, 'positions'),
-          fetchDataForDriver(driver2, 'positions')
-        ]);
-
-        setIntervalData({
-          [driver1.driver_number]: driver1Intervals as IntervalData[],
-          [driver2.driver_number]: driver2Intervals as IntervalData[]
-        });
-
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setIsLoading(false);
-      }
-    };
-
-    if (sessionId && driver1 && driver2) {
-      fetchData();
-    }
-
-    let pollInterval: NodeJS.Timeout | null = null;
-    if (isLiveSession) {
-      pollInterval = setInterval(fetchData, 5000);
-    }
-
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-    };
-  }, [sessionId, driver1.driver_number, driver2.driver_number, isLiveSession]);
-
-  useEffect(() => {
     const calculateCurrentGap = () => {
-      const driver1Intervals = intervalData[driver1.driver_number] || [];
-      const driver2Intervals = intervalData[driver2.driver_number] || [];
-
-      if (!driver1Intervals.length || !driver2Intervals.length) return null;
+      if (!driver1Intervals?.length || !driver2Intervals?.length) return null;
 
       const driver1Interval = findDataAtTime(driver1Intervals, raceTime, sessionStartTime);
       const driver2Interval = findDataAtTime(driver2Intervals, raceTime, sessionStartTime);
@@ -155,7 +90,8 @@ export const GapDisplay: React.FC<Props> = ({
     setCurrentGap(gap);
   }, [
     localTime,
-    intervalData,
+    driver1Intervals,
+    driver2Intervals,
     driver1,
     driver2,
     raceTime,
@@ -164,7 +100,7 @@ export const GapDisplay: React.FC<Props> = ({
     driver2CurrentPosition
   ]);
 
-  if (isLoading) {
+  if (isLoadingDriver1 || isLoadingDriver2) {
     return <LoadingSpinner />;
   }
 
