@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SessionSelector } from './SessionSelector';
 import { DriverGrid } from './DriverGrid';
 import { SimulationControls } from './SimulationControls';
@@ -58,6 +58,12 @@ export const RaceTime: React.FC = () => {
   const handleBackToGrid = () => {
     setSelectedDriverData(null);
   };
+
+  useEffect(() => {
+    // Reset simulation state when session changes
+    setIsSimulationStarted(false);
+    setSelectedDriverData(null);
+  }, [selectedSession]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white py-8">

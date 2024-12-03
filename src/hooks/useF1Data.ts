@@ -383,8 +383,10 @@ export const useF1Data = () => {
   const setSelectedSession = async (session: Session | null) => {
     _setSelectedSession(session);
     
-    // Reset selected drivers when session changes
+    // Reset all relevant state
     setSelectedDrivers({ driver1: null, driver2: null });
+    setTimingData([]);
+    setIsLoading(false);
     
     if (session) {
       try {

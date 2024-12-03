@@ -91,6 +91,17 @@ export const useTimelineManager = ({
     return () => clearInterval(intervalId);
   }, [state.isPaused, state.speed, session, raceEndTime]);
 
+  useEffect(() => {
+    // Reset timeline state when session changes
+    setState({
+      raceTime: 0,
+      localTime: sessionStartTime || new Date(),
+      sessionStartTime: sessionStartTime || new Date(),
+      isPaused: true,
+      speed: 1
+    });
+  }, [session, sessionStartTime]);
+
   const setSpeed = (newSpeed: number) => {
     setState(prev => ({ ...prev, speed: newSpeed }));
   };
